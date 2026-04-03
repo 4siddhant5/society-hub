@@ -1,0 +1,465 @@
+✔ frontend\src\screens\admin\AdminAnnouncementsScreen.js
+import {
+  View,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity
+} from "react-native";
+
+✔ frontend\src\screens\admin\AdminHomeScreen.js
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  FlatList
+} from "react-native";
+
+✔ frontend\src\screens\admin\AdminPollsScreen.js
+import {
+  View,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity
+} from "react-native";
+
+✔ frontend\src\screens\admin\IssueManagementScreen.js
+import {
+  View,
+  FlatList,
+  StyleSheet,
+  Text,
+  Image,
+  TouchableOpacity,
+  TextInput
+} from "react-native";
+import { db } from "../../config/firebase";
+
+✔ frontend\src\screens\admin\ResidentApprovalScreen.js
+import {
+  View,
+  FlatList,
+  StyleSheet,
+  Text
+} from "react-native";
+
+✔ frontend\src\screens\AdminDashboard.js
+import {
+  StyleSheet,
+  Alert,
+  AppState,
+  Platform,
+  View,
+  Text
+} from "react-native";
+import { db } from "../config/firebase";
+
+✔ frontend\src\screens\ApproveResidentsScreen.js
+import {
+  View,
+  Text
+} from "react-native";
+
+✔ frontend\src\screens\BookingManagementScreen.js
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
+  Alert
+} from "react-native";
+import { db } from "../config/firebase";
+
+✔ frontend\src\screens\BroadcastHistoryScreen.js
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+  ActivityIndicator
+} from "react-native";
+import { db } from "../config/firebase";
+
+✔ frontend\src\screens\BroadcastScreen.js
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  SafeAreaView,
+  Alert,
+  ActivityIndicator
+} from "react-native";
+import { db } from "../config/firebase";
+
+✔ frontend\src\screens\ChatScreen.js
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  Image,
+  ActivityIndicator,
+  Modal,
+  Alert,
+  ScrollView
+} from "react-native";
+import { db } from "../config/firebase";
+
+✔ frontend\src\screens\CreateAnnouncementScreen.js
+import {
+  View,
+  Text,
+  TextInput,
+  Button,
+  StyleSheet,
+  Alert,
+  ScrollView,
+  ActivityIndicator,
+  Platform
+} from "react-native";
+import { db } from "../config/firebase";
+
+✔ frontend\src\screens\CreateBookingScreen.js
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ScrollView
+} from "react-native";
+import { db } from "../config/firebase";
+
+✔ frontend\src\screens\CreateIssueScreen.js
+import {
+  View,
+  Text,
+  TextInput,
+  Button,
+  StyleSheet,
+  Alert,
+  Image,
+  ScrollView,
+  ActivityIndicator,
+  Platform
+} from "react-native";
+
+✔ frontend\src\screens\CreatePollScreen.js
+import {
+  View,
+  Text,
+  TextInput,
+  Button,
+  StyleSheet,
+  Alert,
+  ScrollView,
+  ActivityIndicator,
+  TouchableOpacity
+} from "react-native";
+import { db } from "../config/firebase";
+
+✔ frontend\src\screens\EditProfileScreen.js
+import {
+  View,
+  Text,
+  TextInput,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+  SafeAreaView,
+  Image,
+  ScrollView,
+  Platform,
+  Alert
+} from "react-native";
+import { db } from "../config/firebase";
+
+✔ frontend\src\screens\GroupInfoScreen.js
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  Image,
+  SafeAreaView,
+  ActivityIndicator,
+  Platform
+} from "react-native";
+import { db } from "../config/firebase";
+
+✔ frontend\src\screens\IssueDetailScreen.js
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Image,
+  TouchableOpacity,
+  SafeAreaView
+} from "react-native";
+
+✔ frontend\src\screens\LoginScreen.js
+import {
+  View,
+  Text,
+  TextInput,
+  Button,
+  StyleSheet,
+  Alert
+} from "react-native";
+
+✔ frontend\src\screens\MembersScreen.js
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+  ActivityIndicator
+} from "react-native";
+import { db } from "../config/firebase";
+
+✔ frontend\src\screens\NotificationScreen.js
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  SafeAreaView,
+  TouchableOpacity,
+  ActivityIndicator,
+  Platform
+} from "react-native";
+import { db } from "../config/firebase";
+
+✔ frontend\src\screens\ProfileScreen.js
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  ActivityIndicator,
+  TouchableOpacity,
+  Image
+} from "react-native";
+import { db } from "../config/firebase";
+
+✔ frontend\src\screens\RegisterScreen.js
+import {
+  View,
+  Text,
+  TextInput,
+  Button,
+  StyleSheet,
+  Alert,
+  ScrollView
+} from "react-native";
+
+✔ frontend\src\screens\resident\AnnouncementsScreen.js
+import {
+  View,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  Modal,
+  ScrollView
+} from "react-native";
+
+✔ frontend\src\screens\resident\MyIssuesScreen.js
+import {
+  View,
+  FlatList,
+  StyleSheet,
+  Text,
+  Image,
+  TouchableOpacity
+} from "react-native";
+
+✔ frontend\src\screens\resident\PollsScreen.js
+import {
+  View,
+  FlatList,
+  StyleSheet,
+  Text
+} from "react-native";
+
+✔ frontend\src\screens\resident\ResidentHomeScreen.js
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Image
+} from "react-native";
+
+✔ frontend\src\screens\ResidentDashboard.js
+import { StyleSheet, Alert, AppState } from 'react-native';
+import { db } from "../config/firebase";
+
+✔ frontend\src\screens\SOSAlertsScreen.js
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  SafeAreaView,
+  ActivityIndicator
+} from "react-native";
+import { db } from "../config/firebase";
+
+✔ frontend\src\screens\SOSScreen.js
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+  SafeAreaView,
+  ActivityIndicator,
+  Modal,
+  TextInput,
+  ScrollView,
+  Animated
+} from "react-native";
+import { db } from "../config/firebase";
+
+✔ frontend\src\screens\SplashScreen.js
+import {
+  View,
+  ActivityIndicator,
+  StyleSheet,
+  Text
+} from "react-native";
+
+✔ frontend\src\screens\WaitingApproval.js
+import {
+  View,
+  Text,
+  StyleSheet,
+  Button
+} from "react-native";
+
+✔ frontend\src\components\Button.js
+import {
+  TouchableOpacity,
+  Text,
+  StyleSheet,
+  ActivityIndicator
+} from "react-native";
+
+✔ frontend\src\components\Card.js
+import {
+  View,
+  StyleSheet
+} from "react-native";
+
+✔ frontend\src\components\Input.js
+import {
+  TextInput,
+  View,
+  Text,
+  StyleSheet
+} from "react-native";
+
+✔ frontend\src\components\layout\BottomNav.js
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Platform
+} from "react-native";
+
+✔ frontend\src\components\layout\Header.js
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Platform,
+  Modal,
+  FlatList,
+  TouchableWithoutFeedback
+} from "react-native";
+import { db } from "../../config/firebase";
+
+✔ frontend\src\components\layout\Sidebar.js
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  Platform
+} from "react-native";
+
+✔ frontend\src\components\Tag.js
+import {
+  View,
+  Text,
+  StyleSheet
+} from "react-native";
+
+✔ frontend\src\components\ui\AppButton.js
+import {
+  TouchableOpacity,
+  Text,
+  StyleSheet,
+  ActivityIndicator
+} from "react-native";
+
+✔ frontend\src\components\ui\AppCard.js
+import {
+  View,
+  StyleSheet,
+  Platform
+} from "react-native";
+
+✔ frontend\src\components\ui\EmptyState.js
+import {
+  View,
+  Text,
+  StyleSheet
+} from "react-native";
+
+✔ frontend\src\components\ui\SectionHeader.js
+import {
+  View,
+  Text,
+  StyleSheet
+} from "react-native";
+
+✔ frontend\src\components\ui\StatusBadge.js
+import {
+  View,
+  Text,
+  StyleSheet
+} from "react-native";
+
+✔ frontend\src\layouts\BaseLayout.js
+import {
+  View,
+  StyleSheet,
+  useWindowDimensions,
+  SafeAreaView,
+  Platform
+} from "react-native";

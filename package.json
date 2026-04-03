@@ -1,0 +1,11 @@
+{
+  "name": "society-hub-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "node run.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.3.1"
+  }
+}

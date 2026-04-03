@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "Society Hub",
+    "slug": "society-hub",
+    "version": "1.0.0",
+    "scheme": "societyhub",
+    "web": { "bundler": "metro" },
+    "ios": { "supportsTablet": true },
+    "android": { "adaptiveIcon": { "backgroundColor": "#FFFFFF" } }
+  }
+}
