@@ -1,46 +1,46 @@
-import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet
-} from "react-native";
+import React, { memo } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import colors from '../../design/colors';
+import spacing from '../../design/spacing';
 
 const StatusBadge = ({ status }) => {
   const getStyles = () => {
     const s = status?.toLowerCase();
     if (s === 'resolved' || s === 'approved' || s === 'success') {
-      return { bg: '#dcfce7', text: '#166534' };
+      return { bg: colors.successSurface, text: '#166534' };
     }
     if (s === 'pending' || s === 'in progress' || s === 'warning') {
-      return { bg: '#fef9c3', text: '#854d0e' };
+      return { bg: colors.warningSurface, text: '#854d0e' };
     }
     if (s === 'rejected' || s === 'high' || s === 'danger') {
-      return { bg: '#fee2e2', text: '#991b1b' };
+      return { bg: colors.dangerSurface, text: '#991b1b' };
     }
-    return { bg: '#f1f5f9', text: '#475569' };
+    return { bg: colors.primarySurface, text: colors.primary };
   };
 
-  const colors = getStyles();
+  const tone = getStyles();
 
   return (
-    <View style={[styles.badge, { backgroundColor: colors.bg }]}>
-      <Text style={[styles.text, { color: colors.text }]}>{status}</Text>
+    <View style={[styles.badge, { backgroundColor: tone.bg }]}>
+      <Text style={[styles.text, { color: tone.text }]}>{status}</Text>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
     borderRadius: 20,
     alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.18)',
   },
   text: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
     textTransform: 'capitalize',
   },
 });
 
-export default StatusBadge;
+export default memo(StatusBadge);

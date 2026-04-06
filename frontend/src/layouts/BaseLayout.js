@@ -84,19 +84,57 @@ const BaseLayout = ({ children, menuItems, activeScreen, onNavigate, title }) =>
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    height: '100%',
+    maxHeight: '100vh',
+    overflow: 'hidden',
     backgroundColor: '#f8fafc',
+    ...Platform.select({
+      web: {},
+      default: {},
+    }),
   },
   layoutWrapper: {
     flex: 1,
     flexDirection: 'row',
+    overflow: 'hidden',
+    ...Platform.select({
+      web: {
+        height: '100%',
+        maxHeight: '100vh',
+      },
+      default: {
+        minHeight: 0,
+      },
+    }),
   },
   contentWrapper: {
     flex: 1,
     flexDirection: 'column',
+    overflow: 'hidden',
+    ...Platform.select({
+      web: {
+        height: '100%',
+        maxHeight: '100vh',
+      },
+      default: {
+        minHeight: 0,
+      },
+    }),
   },
   mainContent: {
     flex: 1,
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
     backgroundColor: '#f8fafc',
+    ...Platform.select({
+      web: {
+        height: '100vh',
+      },
+      default: {
+        minHeight: 0,
+      },
+    }),
   },
   drawerRoot: {
     flex: 1,

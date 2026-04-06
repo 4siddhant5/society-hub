@@ -1,97 +1,193 @@
 import React from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
   Image,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
   TouchableOpacity,
-  SafeAreaView
-} from "react-native";
+  View,
+} from 'react-native';
+import { FiArrowLeft, FiCalendar, FiFlag } from 'react-icons/fi';
+import AppCard from '../components/ui/AppCard';
+import PageHeader from '../components/ui/PageHeader';
 import StatusBadge from '../components/ui/StatusBadge';
+import colors from '../design/colors';
+import spacing from '../design/spacing';
+
+const formatIssueDate = (value) => {
+  if (!value) return '';
+  if (typeof value?.toDate === 'function') {
+    return value.toDate().toLocaleDateString();
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString();
+};
 
 export default function IssueDetailScreen({ issue, goBack }) {
   if (!issue) return null;
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={goBack} style={styles.backBtn}>
-          <Text style={styles.backBtnText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Issue Detail</Text>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.titleRow}>
-          <Text style={styles.title}>{issue.title}</Text>
-          <StatusBadge status={issue.status} />
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.headerBlock}>
+          <TouchableOpacity onPress={goBack} style={styles.backBtn} activeOpacity={0.85}>
+            <FiArrowLeft size={16} color={colors.primary} />
+            <Text style={styles.backBtnText}>Back</Text>
+          </TouchableOpacity>
+          <PageHeader
+            eyebrow="Issue Review"
+            title={issue.title || 'Issue Detail'}
+            subtitle="A complete status, description, and proof timeline for this report."
+          />
         </View>
 
-        <View style={styles.metaRow}>
-          {!!issue.category && (
-            <View style={styles.pill}>
-              <Text style={styles.pillText}>{issue.category}</Text>
-            </View>
-          )}
-          {!!issue.priority && (
-            <View style={[styles.pill, styles.pillRed]}>
-              <Text style={[styles.pillText, { color: '#dc2626' }]}>{issue.priority}</Text>
-            </View>
-          )}
-        </View>
+        <AppCard style={styles.summaryCard}>
+          <View style={styles.titleRow}>
+            <Text style={styles.sectionTitle}>Current Status</Text>
+            <StatusBadge status={issue.status} />
+          </View>
 
-        <Text style={styles.sectionLabel}>Description</Text>
-        <Text style={styles.description}>{issue.description}</Text>
+          <View style={styles.metaRow}>
+            {!!issue.category ? (
+              <View style={styles.metaPill}>
+                <FiFlag size={14} color={colors.textSecondary} />
+                <Text style={styles.metaPillText}>{issue.category}</Text>
+              </View>
+            ) : null}
+            {!!issue.priority ? (
+              <View style={[styles.metaPill, styles.priorityPill]}>
+                <Text style={[styles.metaPillText, styles.priorityPillText]}>{issue.priority}</Text>
+              </View>
+            ) : null}
+            {!!issue.createdAt ? (
+              <View style={styles.metaPill}>
+                <FiCalendar size={14} color={colors.textSecondary} />
+                <Text style={styles.metaPillText}>Reported {formatIssueDate(issue.createdAt)}</Text>
+              </View>
+            ) : null}
+          </View>
+        </AppCard>
 
-        {(!!issue.beforeImage || !!issue.beforeImageUrl || !!issue.imageUrl) && (
-          <View style={styles.imageSection}>
+        <AppCard style={styles.bodyCard}>
+          <Text style={styles.sectionLabel}>Description</Text>
+          <Text style={styles.description}>{issue.description || 'No description provided.'}</Text>
+        </AppCard>
+
+        {(!!issue.beforeImage || !!issue.beforeImageUrl || !!issue.imageUrl) ? (
+          <AppCard style={styles.imageCard}>
             <Text style={styles.sectionLabel}>Before Image</Text>
             <Image
               source={{ uri: issue.beforeImage || issue.beforeImageUrl || issue.imageUrl }}
               style={styles.image}
               resizeMode="cover"
             />
-          </View>
-        )}
+          </AppCard>
+        ) : null}
 
-        {(!!issue.afterImage || !!issue.afterImageUrl) && (
-          <View style={styles.imageSection}>
-            <Text style={styles.sectionLabel}>After Image (Proof of Resolution)</Text>
+        {(!!issue.afterImage || !!issue.afterImageUrl) ? (
+          <AppCard style={styles.imageCard}>
+            <Text style={styles.sectionLabel}>After Image</Text>
             <Image
               source={{ uri: issue.afterImage || issue.afterImageUrl }}
               style={styles.image}
               resizeMode="cover"
             />
-          </View>
-        )}
-
-        {!!issue.createdAt && (
-          <Text style={styles.date}>
-            Reported on: {new Date(issue.createdAt).toLocaleDateString()}
-          </Text>
-        )}
+          </AppCard>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 20, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
-  backBtn: { marginRight: 16 },
-  backBtnText: { fontSize: 16, color: '#2563eb', fontWeight: '600' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#1e293b' },
-  content: { padding: 20, paddingBottom: 40 },
-  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
-  title: { fontSize: 20, fontWeight: '800', color: '#1e293b', flex: 1, marginRight: 12 },
-  metaRow: { flexDirection: 'row', gap: 8, marginBottom: 20 },
-  pill: { backgroundColor: '#f1f5f9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  pillRed: { backgroundColor: '#fef2f2' },
-  pillText: { fontSize: 12, fontWeight: '700', color: '#475569' },
-  sectionLabel: { fontSize: 12, fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
-  description: { fontSize: 15, color: '#334155', lineHeight: 24, marginBottom: 24 },
-  imageSection: { marginBottom: 24 },
-  image: { width: '100%', height: 220, borderRadius: 16, backgroundColor: '#e2e8f0' },
-  date: { fontSize: 12, color: '#94a3b8', textAlign: 'right', marginTop: 8 },
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  content: {
+    padding: spacing.md,
+    paddingBottom: spacing.xl,
+  },
+  headerBlock: {
+    marginBottom: spacing.md,
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  backBtnText: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  summaryCard: {
+    marginBottom: spacing.md,
+  },
+  bodyCard: {
+    marginBottom: spacing.md,
+  },
+  imageCard: {
+    marginBottom: spacing.md,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  metaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  metaPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  priorityPill: {
+    backgroundColor: '#fef2f2',
+  },
+  priorityPillText: {
+    color: '#dc2626',
+  },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: spacing.sm,
+  },
+  description: {
+    fontSize: 15,
+    lineHeight: 24,
+    color: colors.textPrimary,
+  },
+  image: {
+    width: '100%',
+    height: 240,
+    borderRadius: 16,
+    backgroundColor: '#e2e8f0',
+  },
 });

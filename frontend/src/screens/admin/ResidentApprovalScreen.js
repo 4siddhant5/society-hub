@@ -718,12 +718,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 14,
     padding: 20,
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 2,
     overflow: 'hidden',
+    ...Platform.select({
+      web: { boxShadow: '0 8px 18px rgba(15,23,42,0.08)' },
+      default: {
+        shadowColor: '#0f172a',
+        shadowOpacity: 0.08,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: 2,
+      },
+    }),
   },
   approvalTint: {
     ...StyleSheet.absoluteFillObject,
@@ -744,11 +749,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 18,
     marginBottom: 14,
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 2,
+    ...Platform.select({
+      web: { boxShadow: '0 10px 16px rgba(15,23,42,0.06)' },
+      default: {
+        shadowColor: '#0f172a',
+        shadowOpacity: 0.06,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 10 },
+        elevation: 2,
+      },
+    }),
   },
   residentCardInner: {
     flexDirection: 'row',
@@ -819,10 +829,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
+    ...Platform.select({
+      web: { boxShadow: '0 3px 8px rgba(15,23,42,0.05)' },
+      default: {
+        shadowColor: '#0f172a',
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 3 },
+      },
+    }),
   },
   badgeIcon: {
     fontSize: 11,
@@ -851,11 +866,16 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   cardHover: {
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.12,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 3,
+    ...Platform.select({
+      web: { boxShadow: '0 12px 22px rgba(15,23,42,0.12)' },
+      default: {
+        shadowColor: '#0f172a',
+        shadowOpacity: 0.12,
+        shadowRadius: 22,
+        shadowOffset: { width: 0, height: 12 },
+        elevation: 3,
+      },
+    }),
   },
   pressedScale: {
     transform: [{ scale: 0.995 }],
@@ -899,16 +919,26 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   approveButton: {
-    shadowColor: '#16a34a',
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
+    ...Platform.select({
+      web: { boxShadow: '0 6px 12px rgba(22,163,74,0.18)' },
+      default: {
+        shadowColor: '#16a34a',
+        shadowOpacity: 0.18,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 6 },
+      },
+    }),
   },
   rejectButton: {
-    shadowColor: '#dc2626',
-    shadowOpacity: 0.16,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
+    ...Platform.select({
+      web: { boxShadow: '0 6px 12px rgba(220,38,38,0.16)' },
+      default: {
+        shadowColor: '#dc2626',
+        shadowOpacity: 0.16,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 6 },
+      },
+    }),
   },
   actionButtonText: {
     fontSize: 14,
@@ -917,13 +947,21 @@ const styles = StyleSheet.create({
   },
   actionButtonHover: {
     transform: [{ scale: 1.03 }],
-    shadowOpacity: 0.24,
+    ...Platform.select({
+      web: { boxShadow: '0 6px 16px rgba(0,0,0,0.24)' },
+      default: { shadowOpacity: 0.24 },
+    }),
   },
   actionButtonFocus: {
-    shadowColor: '#93c5fd',
-    shadowOpacity: 0.22,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 0 },
+    ...Platform.select({
+      web: { boxShadow: '0 0 14px rgba(147,197,253,0.22)' },
+      default: {
+        shadowColor: '#93c5fd',
+        shadowOpacity: 0.22,
+        shadowRadius: 14,
+        shadowOffset: { width: 0, height: 0 },
+      },
+    }),
   },
   actionButtonPressed: {
     transform: [{ scale: 0.99 }],
@@ -979,11 +1017,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 1,
+    ...Platform.select({
+      web: { boxShadow: '0 8px 12px rgba(15,23,42,0.05)' },
+      default: {
+        shadowColor: '#0f172a',
+        shadowOpacity: 0.05,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: 1,
+      },
+    }),
   },
   searchBoxDesktop: {
     flex: 1.35,
@@ -992,11 +1035,16 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   searchBoxFocused: {
-    shadowColor: '#60a5fa',
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 2,
+    ...Platform.select({
+      web: { boxShadow: '0 0 14px rgba(96,165,250,0.18)' },
+      default: {
+        shadowColor: '#60a5fa',
+        shadowOpacity: 0.18,
+        shadowRadius: 14,
+        shadowOffset: { width: 0, height: 0 },
+        elevation: 2,
+      },
+    }),
   },
   searchInput: {
     flex: 1,

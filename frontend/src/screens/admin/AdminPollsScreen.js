@@ -1,88 +1,124 @@
-import React from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
-  FlatList,
   StyleSheet,
-  Text,
-  TouchableOpacity
+  useWindowDimensions,
+  ScrollView,
+  Platform,
 } from "react-native";
-import AppCard from '../../components/ui/AppCard';
 import AppButton from '../../components/ui/AppButton';
 import SectionHeader from '../../components/ui/SectionHeader';
 import EmptyState from '../../components/ui/EmptyState';
-import { FiBarChart2, FiLock } from 'react-icons/fi';
+import { FiBarChart2 } from 'react-icons/fi';
+import PollAnalyticsHeader from '../../components/polls/PollAnalyticsHeader';
+import PollCard from '../../components/polls/PollCard';
+import PollDetailModal from '../../components/polls/PollDetailModal';
+import PollMasonryList from '../../components/polls/PollMasonryList';
+import { getPollAnalytics } from '../../components/polls/pollUtils';
 
-const AdminPollsScreen = ({ polls, handleClosePoll, onNavigate }) => {
+const getColumns = (width) => {
+  if (width >= 768) return 2;
+  return 1;
+};
+
+const AdminPollsScreen = ({ polls, handleClosePoll, onNavigate, totalUsers = 0 }) => {
+  const { width } = useWindowDimensions();
+  const [now, setNow] = useState(Date.now());
+  const [selectedPoll, setSelectedPoll] = useState(null);
+  const columns = getColumns(width);
+  const analytics = useMemo(() => getPollAnalytics(polls, totalUsers, now), [now, polls, totalUsers]);
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleOpenDetail = useCallback((poll) => {
+    setSelectedPoll(poll);
+  }, []);
+
+  const handleCloseDetail = useCallback(() => {
+    setSelectedPoll(null);
+  }, []);
+
+  const renderCard = useCallback(
+    (item) => (
+      <PollCard
+        poll={item}
+        now={now}
+        onClosePoll={handleClosePoll}
+        showAdminActions
+        onOpenDetail={handleOpenDetail}
+      />
+    ),
+    [handleClosePoll, handleOpenDetail, now]
+  );
+
   return (
     <View style={styles.container}>
-      <SectionHeader 
-        title="Polls & Voting" 
-        subtitle="Gather society feedback" 
+      <SectionHeader
+        title="Polls & Voting"
+        subtitle="Gather society feedback with live participation insights"
         rightComponent={
-          <AppButton 
-            title="Add Poll" 
-            onPress={() => onNavigate('CreatePoll')} 
+          <AppButton
+            title="Add Poll"
+            onPress={() => onNavigate('CreatePoll')}
             type="primary"
             style={styles.createBtn}
           />
         }
       />
-      <FlatList
-        data={polls}
-        keyExtractor={item => item.id}
-        renderItem={({ item }) => (
-          <AppCard style={styles.card}>
-            <View style={styles.header}>
-              <Text style={styles.question}>{item.question}</Text>
-              {item.isClosed && <FiLock size={16} color="#ef4444" />}
-            </View>
-            
-            <View style={styles.optionsList}>
-              {item.options.map((opt, idx) => {
-                const votesCount = Object.values(item.votes || {}).filter(v => v === opt).length;
-                return (
-                  <View key={idx} style={styles.optionRow}>
-                    <Text style={styles.optionText}>{opt}</Text>
-                    <Text style={styles.voteCount}>{votesCount} votes</Text>
-                  </View>
-                );
-              })}
-            </View>
-
-            {!item.isClosed && (
-              <AppButton 
-                title="Close Poll" 
-                onNavigate
-                onPress={() => handleClosePoll(item.id)} 
-                type="danger"
-                style={styles.closeBtn}
-                textStyle={styles.btnText}
-              />
-            )}
-            <Text style={styles.date}>Created: {new Date(item.createdAt).toLocaleDateString()}</Text>
-          </AppCard>
-        )}
-        ListEmptyComponent={<EmptyState message="No polls created." icon={FiBarChart2} />}
-        contentContainerStyle={styles.list}
+      <View style={styles.scrollArea}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <PollAnalyticsHeader analytics={analytics} isCompact={columns === 1} />
+          <PollMasonryList
+            items={polls}
+            columns={columns}
+            contentContainerStyle={styles.list}
+            renderCard={renderCard}
+            emptyState={<EmptyState message="No polls created." icon={FiBarChart2} />}
+          />
+        </ScrollView>
+      </View>
+      <PollDetailModal
+        visible={!!selectedPoll}
+        poll={selectedPoll}
+        now={now}
+        onClose={handleCloseDetail}
+        onClosePoll={handleClosePoll}
+        showAdminActions
       />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  list: { paddingHorizontal: 16, paddingBottom: 20 },
-  card: { marginBottom: 12 },
+  container: { flex: 1, minHeight: 0, overflow: 'hidden' },
+  scrollArea: {
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+  },
+  scrollView: {
+    flex: 1,
+    height: 'auto',
+    ...Platform.select({
+      web: {
+        overscrollBehavior: 'contain',
+      },
+      default: {},
+    }),
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 24,
+  },
+  list: { paddingBottom: 24 },
   createBtn: { paddingVertical: 8, paddingHorizontal: 12 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  question: { fontSize: 16, fontWeight: '700', color: '#1e293b', flex: 1 },
-  optionsList: { gap: 8, marginBottom: 16 },
-  optionRow: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#f8fafc', padding: 10, borderRadius: 8 },
-  optionText: { fontSize: 14, color: '#334155', fontWeight: '500' },
-  voteCount: { fontSize: 12, color: '#64748b' },
-  closeBtn: { marginTop: 8, paddingVertical: 8 },
-  btnText: { fontSize: 14 },
-  date: { fontSize: 11, color: '#94a3b8', textAlign: 'right', marginTop: 12 }
 });
 
 export default AdminPollsScreen;

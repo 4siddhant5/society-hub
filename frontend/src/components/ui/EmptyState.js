@@ -1,10 +1,9 @@
-import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet
-} from "react-native";
+import React, { memo } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { FiInbox } from 'react-icons/fi';
+import colors from '../../design/colors';
+import spacing from '../../design/spacing';
+import typography from '../../design/typography';
 
 const EmptyState = ({ message, icon: Icon = FiInbox }) => {
   return (
@@ -17,16 +16,17 @@ const EmptyState = ({ message, icon: Icon = FiInbox }) => {
 
 const styles = StyleSheet.create({
   container: {
-    padding: 40,
+    padding: spacing.xl,
     alignItems: 'center',
     justifyContent: 'center',
   },
   text: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#64748b',
+    ...typography.bodyLarge,
+    marginTop: spacing.sm,
+    color: colors.textSecondary,
     textAlign: 'center',
+    maxWidth: 320,
   },
 });
 
-export default EmptyState;
+export default memo(EmptyState);

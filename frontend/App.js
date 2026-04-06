@@ -1,4 +1,5 @@
-import React, { useContext } from 'react';
+import React, { useContext, useEffect } from 'react';
+import { Platform } from 'react-native';
 import { AuthProvider, AuthContext } from './src/context/AuthContext';
 import { ThemeProvider } from './src/context/ThemeContext';
 import LoginScreen from './src/screens/LoginScreen';
@@ -41,6 +42,35 @@ const AppContent = () => {
 };
 
 export default function App() {
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') {
+      return undefined;
+    }
+
+    const style = document.createElement('style');
+    style.setAttribute('data-app-scroll-lock', 'true');
+    style.textContent = `
+      html, body {
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+      }
+
+      body > div,
+      #root,
+      #root > div {
+        height: 100%;
+        overflow: hidden;
+      }
+    `;
+
+    document.head.appendChild(style);
+
+    return () => {
+      style.remove();
+    };
+  }, []);
+
   return (
     <ThemeProvider>
       <AuthProvider>

@@ -5,15 +5,17 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  TextInput,
   ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
 
-import SectionHeader from '../../components/ui/SectionHeader';
-import { FiSearch } from 'react-icons/fi';
+import AppCard from '../../components/ui/AppCard';
+import PageHeader from '../../components/ui/PageHeader';
+import SearchBar from '../../components/ui/SearchBar';
 import IssueGrid from './components/IssueGrid';
 import ImageModal from './components/ImageModal';
+import colors from '../../design/colors';
+import spacing from '../../design/spacing';
 
 import { db } from '../../config/firebase';
 import { collection, addDoc } from 'firebase/firestore';
@@ -72,21 +74,24 @@ const IssueManagementScreen = ({
   const activeTabBg = isDark ? '#2563eb' : '#1d4ed8';
 
   return (
-    <View style={[styles.container, { backgroundColor: isDark ? '#121212' : '#f8fafc' }]}>
-      <SectionHeader title="Issue Management" subtitle="Track, manage and resolve issues efficiently" />
+    <View style={[styles.container, { backgroundColor: isDark ? '#121212' : colors.background }]}>
+      <View style={styles.pagePadding}>
+        <PageHeader
+          eyebrow="Admin Workspace"
+          title="Issue Management"
+          subtitle="Track, manage, and resolve resident issues with the same review flow used across the admin experience."
+        />
+      </View>
 
       <View style={styles.topSection}>
-        <View style={[styles.searchWrap, { backgroundColor: inputBg, borderColor }]}>
-          <FiSearch size={16} color={isDark ? '#94a3b8' : '#64748b'} />
-          <TextInput
-            style={[styles.searchInput, { color: textColor }]}
-            placeholder="Search issues by title, description, or category"
-            placeholderTextColor={isDark ? '#64748b' : '#94a3b8'}
+        <AppCard style={[styles.controlsCard, { backgroundColor: inputBg, borderColor }]}>
+          <SearchBar
             value={search}
             onChangeText={setSearch}
+            placeholder="Search issues by title, description, or category"
+            style={[styles.searchWrap, { backgroundColor: inputBg, borderColor }]}
+            inputStyle={{ color: textColor }}
           />
-        </View>
-
         <View style={styles.filterRow}>
           {[
             { value: 'all', label: 'All' },
@@ -116,6 +121,7 @@ const IssueManagementScreen = ({
             </TouchableOpacity>
           ))}
         </View>
+        </AppCard>
       </View>
 
       {listLoading ? (
@@ -154,29 +160,25 @@ const IssueManagementScreen = ({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  pagePadding: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+  },
   topSection: {
-    paddingHorizontal: 16,
-    marginBottom: 16,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  controlsCard: {
+    borderRadius: 24,
+    padding: spacing.md,
+    marginBottom: 0,
   },
   searchWrap: {
-    borderWidth: 1,
-    borderRadius: 16,
-    minHeight: 52,
-    paddingHorizontal: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    boxShadow: '0px 12px 30px rgba(15, 23, 42, 0.06)',
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: 10,
-    fontSize: 14,
-    paddingVertical: 0,
+    marginBottom: spacing.sm,
   },
   filterRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: spacing.xs,
     flexWrap: 'wrap',
   },
   filterChip: {

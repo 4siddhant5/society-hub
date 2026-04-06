@@ -8,13 +8,18 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions,
 } from 'react-native';
-import { FiAlertTriangle, FiCalendar, FiFlag, FiImage, FiPlus, FiSearch, FiX } from 'react-icons/fi';
+import { FiAlertTriangle, FiCalendar, FiFlag, FiImage, FiPlus, FiX } from 'react-icons/fi';
+import AppCard from '../../components/ui/AppCard';
 import EmptyState from '../../components/ui/EmptyState';
+import PageHeader from '../../components/ui/PageHeader';
+import PrimaryButton from '../../components/ui/PrimaryButton';
+import SearchBar from '../../components/ui/SearchBar';
+import colors from '../../design/colors';
+import spacing from '../../design/spacing';
 
 const IMAGE_HEIGHT = 132;
 const WEB_TRANSITION = Platform.OS === 'web' ? { transitionDuration: '180ms' } : null;
@@ -139,7 +144,7 @@ const IssueCard = memo(function IssueCard({
         pressed && styles.cardPressed,
       ]}
     >
-      <View style={[styles.card, { backgroundColor: cardBg, borderColor }]}>
+      <AppCard style={[styles.card, { backgroundColor: cardBg, borderColor }]}>
         <View style={styles.cardHeader}>
           <View style={styles.headerTextWrap}>
             <Text numberOfLines={2} style={[styles.title, { color: titleColor }]}>
@@ -184,7 +189,7 @@ const IssueCard = memo(function IssueCard({
             </Text>
           </View>
         </View>
-      </View>
+      </AppCard>
     </Pressable>
   );
 });
@@ -269,7 +274,7 @@ const MyIssuesScreen = ({ issues, onNavigate }) => {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: isDark ? '#020617' : '#f8fafc' }]}>
+    <View style={[styles.container, { backgroundColor: isDark ? '#020617' : colors.background }]}>
       <FlatList
         key={`issues-${numColumns}`}
         data={filtered}
@@ -281,7 +286,7 @@ const MyIssuesScreen = ({ issues, onNavigate }) => {
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <View style={styles.headerArea}>
-            <View
+            <AppCard
               style={[
                 styles.heroCard,
                 {
@@ -291,28 +296,24 @@ const MyIssuesScreen = ({ issues, onNavigate }) => {
               ]}
             >
               <View style={[styles.heroTopRow, isMobile && styles.heroTopRowStack]}>
-                <View style={styles.heroCopy}>
-                  <Text style={[styles.heroEyebrow, { color: isDark ? '#93c5fd' : '#2563eb' }]}>
-                    Resident Dashboard
-                  </Text>
-                  <Text style={[styles.heroTitle, { color: isDark ? '#f8fafc' : '#0f172a' }]}>
-                    My Reported Issues
-                  </Text>
-                  <Text style={[styles.heroSubtitle, { color: isDark ? '#94a3b8' : '#64748b' }]}>
-                    Track every request with a cleaner timeline, clearer status updates, and quick image review.
-                  </Text>
-                </View>
+                <PageHeader
+                  eyebrow="Resident Dashboard"
+                  title="My Reported Issues"
+                  subtitle="Track every request with a cleaner timeline, clearer status updates, and quick image review."
+                  contained={false}
+                  style={styles.heroHeaderCard}
+                />
 
                 {!isMobile ? (
-                  <TouchableOpacity style={styles.primaryButton} onPress={handleCreateIssue} activeOpacity={0.92}>
-                    <FiPlus size={16} color="#ffffff" />
-                    <Text style={styles.primaryButtonText}>Report New Issue</Text>
-                  </TouchableOpacity>
+                  <PrimaryButton title="Report New Issue" onPress={handleCreateIssue} icon={FiPlus} style={styles.primaryButton} />
                 ) : null}
               </View>
 
               <View style={[styles.controlsRow, isMobile && styles.controlsRowStack]}>
-                <View
+                <SearchBar
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder="Search by title, description, or category"
                   style={[
                     styles.searchWrap,
                     {
@@ -320,16 +321,8 @@ const MyIssuesScreen = ({ issues, onNavigate }) => {
                       borderColor: isDark ? 'rgba(148, 163, 184, 0.14)' : '#dbe4f0',
                     },
                   ]}
-                >
-                  <FiSearch size={16} color={isDark ? '#94a3b8' : '#64748b'} />
-                  <TextInput
-                    style={[styles.searchInput, { color: isDark ? '#f8fafc' : '#0f172a' }]}
-                    placeholder="Search by title, description, or category"
-                    placeholderTextColor={isDark ? '#64748b' : '#94a3b8'}
-                    value={search}
-                    onChangeText={setSearch}
-                  />
-                </View>
+                  inputStyle={{ color: isDark ? '#f8fafc' : '#0f172a' }}
+                />
 
                 <View style={styles.filterRow}>
                   {['all', 'Pending', 'In Progress', 'Resolved'].map((status) => {
@@ -355,7 +348,7 @@ const MyIssuesScreen = ({ issues, onNavigate }) => {
                   })}
                 </View>
               </View>
-            </View>
+            </AppCard>
           </View>
         }
         ListEmptyComponent={
@@ -381,7 +374,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.md,
     paddingTop: 18,
     paddingBottom: 108,
   },
@@ -390,14 +383,13 @@ const styles = StyleSheet.create({
   },
   heroCard: {
     borderRadius: 24,
-    borderWidth: 1,
     padding: 20,
-    boxShadow: '0px 22px 48px rgba(15, 23, 42, 0.10)',
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.08,
-    shadowRadius: 24,
-    elevation: 4,
+    marginBottom: 0,
+  },
+  heroHeaderCard: {
+    flex: 1,
+    padding: 0,
+    marginBottom: 0,
   },
   heroTopRow: {
     flexDirection: 'row',
@@ -408,42 +400,8 @@ const styles = StyleSheet.create({
   heroTopRowStack: {
     flexDirection: 'column',
   },
-  heroCopy: {
-    flex: 1,
-  },
-  heroEyebrow: {
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    marginBottom: 8,
-  },
-  heroTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    lineHeight: 34,
-  },
-  heroSubtitle: {
-    fontSize: 14,
-    lineHeight: 22,
-    marginTop: 8,
-    maxWidth: 720,
-  },
   primaryButton: {
-    minHeight: 48,
-    borderRadius: 14,
-    paddingHorizontal: 18,
-    backgroundColor: '#2563eb',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    boxShadow: '0px 16px 30px rgba(37, 99, 235, 0.28)',
-  },
-  primaryButtonText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '800',
+    minWidth: 176,
   },
   controlsRow: {
     marginTop: 18,
@@ -453,18 +411,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   searchWrap: {
-    minHeight: 52,
-    borderRadius: 16,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  searchInput: {
     flex: 1,
-    fontSize: 14,
-    paddingVertical: 0,
   },
   filterRow: {
     flexDirection: 'row',
@@ -508,15 +455,9 @@ const styles = StyleSheet.create({
   card: {
     minHeight: 100,
     height: '100%',
-    borderRadius: 16,
     borderWidth: 1,
     padding: 18,
-    boxShadow: '0px 18px 40px rgba(15, 23, 42, 0.08)',
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 20,
-    elevation: 3,
+    marginBottom: 0,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -642,15 +583,10 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#2563eb',
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     boxShadow: '0px 20px 32px rgba(37, 99, 235, 0.28)',
-    shadowColor: '#2563eb',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 18,
-    elevation: 6,
   },
   modalBackdrop: {
     flex: 1,

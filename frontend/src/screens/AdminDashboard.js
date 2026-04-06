@@ -9,17 +9,15 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as DocumentPicker from 'expo-document-picker';
 import { useAuth } from '../context/AuthContext';
 import { updateIssueStatus, resolveIssue } from '../services/issueService';
-import { uploadImage, uploadDocument } from '../services/cloudinaryService';
-import { deleteAnnouncement, updateAnnouncement } from '../services/announcementService';
+import { uploadImage } from '../services/cloudinaryService';
+import { deleteAnnouncement } from '../services/announcementService';
 import { db } from '../config/firebase';
 import {
   collection,
   query,
   where,
-  getDocs,
   doc,
   updateDoc,
   getDoc,
@@ -79,6 +77,7 @@ const SCREEN_TITLES = {
   MembersScreen: 'Members',
   CreateAnnouncement: 'Create Announcement',
   CreateAnnouncementScreen: 'Create Announcement',
+  EditAnnouncement: 'Update Announcement',
   CreatePoll: 'Create Poll',
   CreatePollScreen: 'Create Poll',
   IssueDetail: 'Issue Detail',
@@ -576,7 +575,7 @@ export default function AdminDashboard() {
           />
         );
       case 'Polls':
-        return <AdminPollsScreen polls={polls} handleClosePoll={handleClosePoll} onNavigate={navigate} />;
+        return <AdminPollsScreen polls={polls} handleClosePoll={handleClosePoll} onNavigate={navigate} totalUsers={stats.residents} />;
       case 'SOSAlerts':
       case 'SOSAlertsScreen':
         return <SOSAlertsScreen goBack={goBack} />;
@@ -601,6 +600,14 @@ export default function AdminDashboard() {
       case 'CreateAnnouncement':
       case 'CreateAnnouncementScreen':
         return <CreateAnnouncementScreen navigation={{ navigate, goBack }} goBack={goBack} />;
+      case 'EditAnnouncement':
+        return (
+          <CreateAnnouncementScreen
+            navigation={{ navigate, goBack }}
+            goBack={goBack}
+            announcement={current.params?.announcement}
+          />
+        );
       case 'CreatePoll':
       case 'CreatePollScreen':
         return <CreatePollScreen navigation={{ navigate, goBack }} goBack={goBack} />;

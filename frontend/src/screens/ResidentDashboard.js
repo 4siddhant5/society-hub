@@ -25,6 +25,7 @@ import IssueDetailScreen from './IssueDetailScreen';
 import NotificationScreen from './NotificationScreen';
 import BookingScreen from './BookingScreen';
 import BookingCalendarScreen from './BookingCalendarScreen';
+import { isPollExpired } from '../components/polls/pollUtils';
 
 export default function ResidentDashboard() {
   const { user, userData } = useAuth();
@@ -148,7 +149,7 @@ export default function ResidentDashboard() {
   }, [activeSOS?.id]);
 
   const handleVote = async (poll, selectedOption) => {
-    if (poll.isClosed) return Alert.alert('Closed', 'This poll is closed.');
+    if (poll.isClosed || isPollExpired(poll)) return Alert.alert('Closed', 'This poll is closed.');
     if (poll.votes && poll.votes[user.uid]) return Alert.alert('Voted', 'Already voted');
     try {
       await updateDoc(doc(db, 'polls', poll.id), { [`votes.${user.uid}`]: selectedOption });
