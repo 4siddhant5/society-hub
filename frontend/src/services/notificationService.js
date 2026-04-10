@@ -1,18 +1,25 @@
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { app, db } from "../config/firebase";
-import { doc, updateDoc, setDoc } from "firebase/firestore";
+import { doc, updateDoc } from "firebase/firestore";
 import { Alert, Platform } from "react-native";
 
-// Only initialize messaging if supported (e.g. web or properly linked app)
+const isWebMessagingSupported =
+  Platform.OS === "web" &&
+  typeof window !== "undefined" &&
+  typeof Notification !== "undefined";
+
 let messaging;
-try {
-  messaging = getMessaging(app);
-} catch (error) {
-  console.warn("Firebase messaging not supported in this environment");
+
+if (isWebMessagingSupported) {
+  try {
+    messaging = getMessaging(app);
+  } catch (error) {
+    console.warn("Firebase messaging not supported in this environment");
+  }
 }
 
 export const requestNotificationPermission = async () => {
-  if (!messaging) return false;
+  if (!messaging || !isWebMessagingSupported) return false;
   try {
     const permission = await Notification.requestPermission();
     if (permission === 'granted') {
@@ -29,7 +36,7 @@ export const requestNotificationPermission = async () => {
 };
 
 export const getFCMToken = async () => {
-  if (!messaging) return null;
+  if (!messaging || !isWebMessagingSupported) return null;
   try {
     // You typically need to pass the VAPID key in a real web app config
     const currentToken = await getToken(messaging, {
@@ -67,7 +74,7 @@ export const saveTokenToFirestore = async (uid, societyId) => {
 };
 
 export const listenToForegroundMessages = (navigation) => {
-  if (!messaging) return () => {};
+  if (!messaging || !isWebMessagingSupported) return () => {};
   
   return onMessage(messaging, (payload) => {
     console.log('Message received. ', payload);

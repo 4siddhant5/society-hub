@@ -1,123 +1,758 @@
-import React from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import {
-  View,
   FlatList,
+  Image,
+  Modal,
+  Platform,
+  Pressable,
   StyleSheet,
   Text,
-  Image,
   TouchableOpacity,
-  TextInput
-} from "react-native";
-import { useState } from 'react';
+  View,
+  useWindowDimensions,
+} from 'react-native';
+import { FiAlertTriangle, FiCalendar, FiFlag, FiImage, FiPlus, FiX } from '../../utils/iconCompat';
 import AppCard from '../../components/ui/AppCard';
-import SectionHeader from '../../components/ui/SectionHeader';
-import StatusBadge from '../../components/ui/StatusBadge';
 import EmptyState from '../../components/ui/EmptyState';
-import { FiAlertTriangle } from 'react-icons/fi';
+import PrimaryButton from '../../components/ui/PrimaryButton';
+import SearchBar from '../../components/ui/SearchBar';
+import colors from '../../design/colors';
+import spacing from '../../design/spacing';
 
-const MyIssuesScreen = ({ issues, onNavigate }) => {
-  const { isDark } = useTheme();
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState("all");
+const IMAGE_HEIGHT = 132;
+const WEB_TRANSITION = Platform.OS === 'web' ? { transitionDuration: '180ms' } : null;
 
-  const filtered = issues?.filter(issue =>
-    (
-      (issue.title || "").toLowerCase().includes(search.toLowerCase()) ||
-      (issue.description || "").toLowerCase().includes(search.toLowerCase()) ||
-      (issue.category || "").toLowerCase().includes(search.toLowerCase())
-    ) &&
-    (filter === "all" || issue.status === filter)
-  ) || [];
+const getStatusTone = (status) => {
+  const value = `${status || 'Pending'}`.trim().toLowerCase();
 
-  const textColor = isDark ? "#ffffff" : "#1e293b";
-  const descColor = isDark ? "#aaaaaa" : "#475569";
+  if (value === 'resolved') {
+    return { bg: '#dcfce7', text: '#166534' };
+  }
+
+  if (value === 'in progress') {
+    return { bg: '#dbeafe', text: '#1d4ed8' };
+  }
+
+  return { bg: '#fef3c7', text: '#a16207' };
+};
+
+const getPriorityTone = (priority) => {
+  const value = `${priority || 'N/A'}`.trim().toLowerCase();
+
+  if (value === 'high') {
+    return { bg: '#fee2e2', text: '#b91c1c' };
+  }
+
+  if (value === 'medium') {
+    return { bg: '#ffedd5', text: '#c2410c' };
+  }
+
+  if (value === 'low') {
+    return { bg: '#ecfccb', text: '#3f6212' };
+  }
+
+  return { bg: '#e2e8f0', text: '#475569' };
+};
+
+const formatIssueDate = (value) => {
+  if (!value) return 'Date unavailable';
+
+  if (typeof value?.toDate === 'function') {
+    return value.toDate().toLocaleDateString();
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Date unavailable';
+  return date.toLocaleDateString();
+};
+
+const getBeforeImage = (item) => item?.beforeImage || item?.beforeImageUrl || item?.imageUrl || '';
+const getAfterImage = (item) => item?.afterImage || item?.afterImageUrl || '';
+
+const ImageSlot = memo(function ImageSlot({ label, uri, isDark, onPreview }) {
+  const [hasError, setHasError] = useState(false);
+  const resolvedUri = hasError ? '' : uri;
 
   return (
-    <View style={[styles.container, { backgroundColor: isDark ? '#121212' : '#f8fafc' }]}>
-      <SectionHeader title="My Reported Issues" />
-      
-      <View style={styles.filterContainer}>
-        <TextInput 
-          style={styles.searchInput} 
-          placeholder="Search my issues..." 
-          value={search} 
-          onChangeText={setSearch} 
-        />
-        <View style={styles.filterRow}>
-          {['all', 'Pending', 'In Progress', 'Resolved'].map(status => (
-            <TouchableOpacity 
-              key={status} 
-              style={[styles.filterChip, filter === status && styles.filterChipActive]}
-              onPress={() => setFilter(status)}
-            >
-              <Text style={[styles.filterChipText, filter === status && styles.filterChipTextActive]}>
-                {status.charAt(0).toUpperCase() + status.slice(1)}
+    <View style={styles.timelineItem}>
+      <Text style={[styles.timelineLabel, { color: isDark ? '#94a3b8' : '#64748b' }]}>{label}</Text>
+      {resolvedUri ? (
+        <Pressable
+          onPress={(event) => {
+            event.stopPropagation?.();
+            onPreview?.(resolvedUri, label);
+          }}
+          style={({ pressed }) => [styles.imageFrame, pressed && styles.imageFramePressed]}
+        >
+          <Image
+            source={{ uri: resolvedUri }}
+            style={styles.image}
+            resizeMode="cover"
+            onError={() => setHasError(true)}
+          />
+          <View style={styles.imageOverlay}>
+            <Text style={styles.imageOverlayText}>Tap to view full image</Text>
+          </View>
+        </Pressable>
+      ) : (
+        <View
+          style={[
+            styles.imageFrame,
+            styles.placeholderFrame,
+            { backgroundColor: isDark ? 'rgba(51, 65, 85, 0.78)' : '#e5e7eb' },
+          ]}
+        >
+          <FiImage size={22} color={isDark ? '#cbd5e1' : '#64748b'} />
+          <Text style={[styles.placeholderText, { color: isDark ? '#e2e8f0' : '#475569' }]}>
+            No Image Available
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+});
+
+const IssueCard = memo(function IssueCard({
+  item,
+  isDark,
+  isCompact,
+  onOpenDetail,
+  onOpenImage,
+}) {
+  const [hovered, setHovered] = useState(false);
+  const statusTone = useMemo(() => getStatusTone(item.status), [item.status]);
+  const priorityTone = useMemo(() => getPriorityTone(item.priority), [item.priority]);
+  const beforeImage = useMemo(() => getBeforeImage(item), [item]);
+  const afterImage = useMemo(() => getAfterImage(item), [item]);
+  const cardBg = isDark ? 'rgba(15, 23, 42, 0.96)' : 'rgba(255, 255, 255, 0.98)';
+  const borderColor = isDark ? 'rgba(148, 163, 184, 0.16)' : '#e2e8f0';
+  const titleColor = isDark ? '#f8fafc' : '#0f172a';
+  const bodyColor = isDark ? '#cbd5e1' : '#475569';
+  const subtleColor = isDark ? '#94a3b8' : '#64748b';
+
+  return (
+    <Pressable
+      onPress={() => onOpenDetail(item)}
+      onHoverIn={() => setHovered(true)}
+      onHoverOut={() => setHovered(false)}
+      style={({ pressed }) => [
+        styles.cardPressable,
+        WEB_TRANSITION,
+        hovered && styles.cardHovered,
+        pressed && styles.cardPressed,
+      ]}
+    >
+      <AppCard style={[styles.card, { backgroundColor: cardBg, borderColor }]}>
+        <View style={styles.cardHeader}>
+          <View style={styles.headerTextWrap}>
+            <Text numberOfLines={2} style={[styles.title, { color: titleColor }]}>
+              {item.title || 'Untitled issue'}
+            </Text>
+            <Text style={[styles.date, { color: subtleColor }]}>
+              {formatIssueDate(item.createdAt)}
+            </Text>
+          </View>
+          <View style={styles.badgeStack}>
+            <View style={[styles.pillBadge, { backgroundColor: priorityTone.bg }]}>
+              <Text style={[styles.pillBadgeText, { color: priorityTone.text }]}>
+                {item.priority || 'N/A'}
               </Text>
-            </TouchableOpacity>
-          ))}
+            </View>
+            <View style={[styles.pillBadge, { backgroundColor: statusTone.bg }]}>
+              <Text style={[styles.pillBadgeText, { color: statusTone.text }]}>{item.status || 'Pending'}</Text>
+            </View>
+          </View>
+        </View>
+
+        <Text numberOfLines={3} style={[styles.description, { color: bodyColor }]}>
+          {item.description || 'No description provided.'}
+        </Text>
+
+        <View style={[styles.timelineWrap, !isCompact && styles.timelineWrapDesktop]}>
+          <ImageSlot label="Before" uri={beforeImage} isDark={isDark} onPreview={onOpenImage} />
+          <ImageSlot label="After" uri={afterImage} isDark={isDark} onPreview={onOpenImage} />
+        </View>
+
+        <View style={styles.metaRow}>
+          <View style={[styles.metaPill, { backgroundColor: isDark ? '#1e293b' : '#f8fafc' }]}>
+            <FiFlag size={13} color={subtleColor} />
+            <Text numberOfLines={1} style={[styles.metaText, { color: subtleColor }]}>
+              {item.category || 'General'}
+            </Text>
+          </View>
+          <View style={[styles.metaPill, { backgroundColor: isDark ? '#1e293b' : '#f8fafc' }]}>
+            <FiCalendar size={13} color={subtleColor} />
+            <Text numberOfLines={1} style={[styles.metaText, { color: subtleColor }]}>
+              {formatIssueDate(item.createdAt)}
+            </Text>
+          </View>
+        </View>
+      </AppCard>
+    </Pressable>
+  );
+});
+
+const ImagePreviewModal = memo(function ImagePreviewModal({ preview, onClose }) {
+  return (
+    <Modal transparent animationType="fade" visible={!!preview} onRequestClose={onClose}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose}>
+        <Pressable style={styles.modalCard} onPress={(event) => event.stopPropagation?.()}>
+          <TouchableOpacity style={styles.modalCloseButton} onPress={onClose} activeOpacity={0.9}>
+            <FiX size={18} color="#e2e8f0" />
+          </TouchableOpacity>
+          <Text style={styles.modalLabel}>{preview?.label || 'Issue Image'}</Text>
+          {preview?.uri ? (
+            <Image source={{ uri: preview.uri }} style={styles.modalImage} resizeMode="contain" />
+          ) : null}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+});
+
+const MyIssuesScreen = ({ issues, onNavigate }) => {
+  const { user } = useAuth();
+  const { isDark } = useTheme();
+  const { width } = useWindowDimensions();
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [scope, setScope] = useState('all');
+  const [preview, setPreview] = useState(null);
+
+  const isMobile = width < 768;
+  const isTablet = width >= 768 && width < 1180;
+  const numColumns = isTablet ? 2 : width >= 1180 ? 3 : 1;
+
+  const isUserIssue = useCallback(
+    (issue) =>
+      !!user?.uid &&
+      (issue?.userId === user.uid ||
+        issue?.createdBy === user.uid ||
+        issue?.residentId === user.uid ||
+        issue?.reportedBy === user.uid),
+    [user?.uid]
+  );
+
+  const filtered = useMemo(
+    () =>
+      issues?.filter(
+        (issue) =>
+          (scope === 'all' || isUserIssue(issue)) &&
+          ((issue.title || '').toLowerCase().includes(search.toLowerCase()) ||
+            (issue.description || '').toLowerCase().includes(search.toLowerCase()) ||
+            (issue.category || '').toLowerCase().includes(search.toLowerCase())) &&
+          (filter === 'all' || issue.status === filter)
+      ) || [],
+    [filter, isUserIssue, issues, scope, search]
+  );
+
+  const handleOpenDetail = useCallback(
+    (item) => {
+      onNavigate && onNavigate('IssueDetail', { issue: item });
+    },
+    [onNavigate]
+  );
+
+  const handleOpenPreview = useCallback((uri, label) => {
+    setPreview(uri ? { uri, label } : null);
+  }, []);
+
+  const handleClosePreview = useCallback(() => setPreview(null), []);
+
+  const handleCreateIssue = useCallback(() => {
+    onNavigate && onNavigate('CreateIssue');
+  }, [onNavigate]);
+
+  const renderIssue = useCallback(
+    ({ item, index }) => {
+      const isRowStart = numColumns === 1 || index % numColumns === 0;
+      const isRowEnd = numColumns === 1 || index % numColumns === numColumns - 1;
+
+      return (
+        <View
+          style={[
+            styles.cardColumn,
+            isRowStart && styles.cardColumnStart,
+            isRowEnd && styles.cardColumnEnd,
+            numColumns > 1 && styles.cardColumnMulti,
+            numColumns === 3 && styles.cardColumnWide,
+          ]}
+        >
+          <IssueCard
+            item={item}
+            isDark={isDark}
+            isCompact={isMobile}
+            onOpenDetail={handleOpenDetail}
+            onOpenImage={handleOpenPreview}
+          />
+        </View>
+      );
+    },
+    [handleOpenDetail, handleOpenPreview, isDark, isMobile, numColumns]
+  );
+
+  return (
+    <View style={[styles.issuesPage, { backgroundColor: isDark ? '#020617' : colors.background }]}>
+      <View
+        style={[
+          styles.issuesHeader,
+          {
+            backgroundColor: isDark ? '#0f172a' : '#ffffff',
+            borderBottomColor: isDark ? 'rgba(148, 163, 184, 0.14)' : '#e2e8f0',
+          },
+          isMobile && styles.issuesHeaderMobile,
+        ]}
+      >
+        <Text style={[styles.issuesTitle, { color: isDark ? '#f8fafc' : '#0f172a' }]}>Issues</Text>
+
+        {!isMobile ? (
+          <PrimaryButton
+            title="Report New Issue"
+            onPress={handleCreateIssue}
+            icon={FiPlus}
+            style={styles.primaryButton}
+          />
+        ) : null}
+      </View>
+
+      <View
+        style={[
+          styles.issuesToolbar,
+          {
+            backgroundColor: isDark ? '#0f172a' : '#ffffff',
+            borderBottomColor: isDark ? 'rgba(148, 163, 184, 0.14)' : '#e2e8f0',
+          },
+          isMobile && styles.issuesToolbarMobile,
+        ]}
+      >
+        <View
+          style={[
+            styles.issuesScopeToggle,
+            {
+              backgroundColor: isDark ? '#020617' : '#f8fafc',
+              borderColor: isDark ? 'rgba(148, 163, 184, 0.14)' : '#dbe4f0',
+            },
+          ]}
+        >
+          {[
+            { key: 'all', label: 'All Issues' },
+            { key: 'mine', label: 'My Issues' },
+          ].map((option) => {
+            const active = scope === option.key;
+
+            return (
+              <TouchableOpacity
+                key={option.key}
+                style={[
+                  styles.scopeButton,
+                  active && styles.scopeButtonActive,
+                  { backgroundColor: active ? '#2563eb' : 'transparent' },
+                ]}
+                onPress={() => setScope(option.key)}
+                activeOpacity={0.9}
+              >
+                <Text style={[styles.scopeButtonText, { color: active ? '#ffffff' : isDark ? '#cbd5e1' : '#475569' }]}>
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <SearchBar
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search by title, description, or category"
+          style={[
+            styles.searchWrap,
+            {
+              backgroundColor: isDark ? '#020617' : '#f8fafc',
+              borderColor: isDark ? 'rgba(148, 163, 184, 0.14)' : '#dbe4f0',
+            },
+          ]}
+          inputStyle={{ color: isDark ? '#f8fafc' : '#0f172a' }}
+        />
+
+        <View style={styles.filterRow}>
+          {['all', 'Pending', 'In Progress', 'Resolved'].map((status) => {
+            const active = filter === status;
+            return (
+              <TouchableOpacity
+                key={status}
+                style={[
+                  styles.filterChip,
+                  {
+                    backgroundColor: active ? '#2563eb' : isDark ? '#020617' : '#ffffff',
+                    borderColor: active ? '#2563eb' : isDark ? 'rgba(148, 163, 184, 0.14)' : '#dbe4f0',
+                  },
+                ]}
+                onPress={() => setFilter(status)}
+                activeOpacity={0.9}
+              >
+                <Text style={[styles.filterChipText, { color: active ? '#ffffff' : isDark ? '#cbd5e1' : '#475569' }]}>
+                  {status}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
 
       <FlatList
+        key={`issues-${numColumns}`}
         data={filtered}
-        keyExtractor={item => item.id}
-        renderItem={({ item }) => (
-          <TouchableOpacity onPress={() => onNavigate && onNavigate('IssueDetail', { issue: item })}>
-            <AppCard style={styles.card}>
-              <View style={styles.header}>
-                <Text style={[styles.title, { color: textColor }]}>{item.title}</Text>
-                <StatusBadge status={item.status} />
-              </View>
-              <Text style={[styles.desc, { color: descColor }]}>{item.description}</Text>
-              {!!item.beforeImage && (
-                <View style={styles.imageBox}>
-                  <Text style={styles.imageLabel}>Before</Text>
-                  <Image source={{ uri: item.beforeImage }} style={styles.image} resizeMode="cover" />
-                </View>
-              )}
-              {!!item.afterImage && (
-                <View style={styles.imageBox}>
-                  <Text style={styles.imageLabel}>After</Text>
-                  <Image source={{ uri: item.afterImage }} style={styles.image} resizeMode="cover" />
-                </View>
-              )}
-              <View style={styles.meta}>
-                <Text style={styles.metaLabel}>Priority: <Text style={styles.metaValue}>{item.priority || 'N/A'}</Text></Text>
-                <Text style={styles.metaLabel}>Category: <Text style={styles.metaValue}>{item.category || 'N/A'}</Text></Text>
-              </View>
-              <Text style={styles.date}>{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : ''}</Text>
-            </AppCard>
-          </TouchableOpacity>
-        )}
-        ListEmptyComponent={<EmptyState message="No issues reported yet." icon={FiAlertTriangle} />}
-        contentContainerStyle={styles.list}
+        keyExtractor={(item) => item.id}
+        renderItem={renderIssue}
+        numColumns={numColumns}
+        style={styles.issuesContent}
+        columnWrapperStyle={numColumns > 1 ? styles.columnWrapper : null}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        ListFooterComponent={<View style={styles.listFooter} />}
+        ListEmptyComponent={
+          <View style={[styles.emptyWrap, isMobile && styles.emptyWrapMobile]}>
+            <EmptyState message="No issues reported yet." icon={FiAlertTriangle} />
+          </View>
+        }
       />
+
+      {isMobile ? (
+        <TouchableOpacity style={styles.fab} onPress={handleCreateIssue} activeOpacity={0.92}>
+          <FiPlus size={24} color="#ffffff" />
+        </TouchableOpacity>
+      ) : null}
+
+      <ImagePreviewModal preview={preview} onClose={handleClosePreview} />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  list: { paddingHorizontal: 16, paddingBottom: 20 },
-  filterContainer: { paddingHorizontal: 16, marginBottom: 12 },
-  searchInput: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, padding: 10, marginBottom: 10 },
-  filterRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  filterChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: '#e2e8f0' },
-  filterChipActive: { backgroundColor: '#2563eb' },
-  filterChipText: { fontSize: 13, color: '#475569', fontWeight: '600' },
-  filterChipTextActive: { color: '#fff' },
-  card: { marginBottom: 12 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  title: { fontSize: 16, fontWeight: '700', color: '#1e293b', flex: 1, marginRight: 8 },
-  desc: { fontSize: 14, color: '#64748b', lineHeight: 20, marginBottom: 12 },
-  imageBox: { marginBottom: 10 },
-  imageLabel: { fontSize: 11, fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', marginBottom: 4 },
-  image: { width: '100%', height: 150, borderRadius: 10, backgroundColor: '#f1f5f9' },
-  meta: { flexDirection: 'row', gap: 16, marginBottom: 8 },
-  metaLabel: { fontSize: 12, color: '#94a3b8' },
-  metaValue: { color: '#475569', fontWeight: '600' },
-  date: { fontSize: 12, color: '#94a3b8', textAlign: 'right' }
+  issuesPage: {
+    flex: 1,
+    minHeight: 0,
+  },
+  issuesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: spacing.md,
+    paddingTop: 12,
+    paddingBottom: 12,
+    marginBottom: 10,
+    borderBottomWidth: 1,
+  },
+  issuesHeaderMobile: {
+    paddingHorizontal: spacing.sm,
+    paddingTop: 10,
+    paddingBottom: 10,
+  },
+  issuesTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    lineHeight: 28,
+  },
+  issuesContent: {
+    flex: 1,
+    minHeight: 0,
+    ...Platform.select({
+      web: {
+        height: '100%',
+        scrollBehavior: 'smooth',
+      },
+      default: {},
+    }),
+  },
+  primaryButton: {
+    minWidth: 176,
+  },
+  listContent: {
+    paddingTop: 0,
+  },
+  listFooter: {
+    height: 20,
+  },
+  issuesToolbar: {
+    paddingHorizontal: spacing.md,
+    paddingTop: 8,
+    paddingBottom: 10,
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+      },
+      default: {
+        shadowColor: '#000000',
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 2,
+      },
+    }),
+  },
+  issuesToolbarMobile: {
+    paddingHorizontal: spacing.sm,
+    paddingTop: 6,
+    paddingBottom: 6,
+  },
+  issuesScopeToggle: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderRadius: 999,
+    padding: 4,
+    marginBottom: 10,
+  },
+  scopeButton: {
+    minHeight: 36,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scopeButtonActive: {
+    shadowColor: '#2563eb',
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  scopeButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  searchWrap: {
+    flex: 1,
+    marginBottom: 10,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  filterChip: {
+    minHeight: 40,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  columnWrapper: {
+    gap: 16,
+  },
+  cardColumn: {
+    paddingHorizontal: spacing.md,
+    marginBottom: 16,
+  },
+  cardColumnStart: {
+    paddingLeft: spacing.md,
+  },
+  cardColumnEnd: {
+    paddingRight: spacing.md,
+  },
+  cardColumnMulti: {
+    flex: 1,
+    paddingHorizontal: 0,
+  },
+  cardColumnWide: {
+    maxWidth: '33.333%',
+  },
+  cardPressable: {
+    flex: 1,
+  },
+  cardHovered: {
+    transform: [{ translateY: -4 }],
+  },
+  cardPressed: {
+    transform: [{ scale: 0.99 }],
+  },
+  card: {
+    minHeight: 100,
+    borderWidth: 1,
+    padding: 18,
+    marginBottom: 0,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 12,
+  },
+  headerTextWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '800',
+    lineHeight: 24,
+  },
+  badgeStack: {
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  pillBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  pillBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  date: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 6,
+  },
+  description: {
+    fontSize: 14,
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  timelineWrap: {
+    gap: 12,
+    marginBottom: 16,
+  },
+  timelineWrapDesktop: {
+    flexDirection: 'row',
+  },
+  timelineItem: {
+    flex: 1,
+  },
+  timelineLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+  imageFrame: {
+    position: 'relative',
+    borderRadius: 14,
+    overflow: 'hidden',
+    height: IMAGE_HEIGHT,
+    backgroundColor: '#e2e8f0',
+  },
+  imageFramePressed: {
+    opacity: 0.94,
+  },
+  placeholderFrame: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    gap: 8,
+  },
+  image: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#e2e8f0',
+  },
+  imageOverlay: {
+    position: 'absolute',
+    right: 10,
+    bottom: 10,
+    backgroundColor: 'rgba(15, 23, 42, 0.74)',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  imageOverlayText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  placeholderText: {
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  metaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  metaText: {
+    fontSize: 12,
+    fontWeight: '700',
+    maxWidth: 180,
+  },
+  emptyWrap: {
+    marginTop: 12,
+    paddingHorizontal: spacing.md,
+  },
+  emptyWrapMobile: {
+    paddingHorizontal: spacing.sm,
+  },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 24,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0px 20px 32px rgba(37, 99, 235, 0.28)',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 23, 0.82)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 960,
+    borderRadius: 24,
+    backgroundColor: '#0f172a',
+    padding: 18,
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    zIndex: 2,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(30, 41, 59, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalLabel: {
+    color: '#e2e8f0',
+    fontSize: 14,
+    fontWeight: '800',
+    marginBottom: 12,
+  },
+  modalImage: {
+    width: '100%',
+    height: 520,
+    borderRadius: 18,
+    backgroundColor: '#020617',
+  },
 });
 
 export default MyIssuesScreen;

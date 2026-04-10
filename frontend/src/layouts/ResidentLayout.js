@@ -1,6 +1,6 @@
 import React from 'react';
 import BaseLayout from './BaseLayout';
-import { FiHome, FiAlertTriangle, FiMessageCircle, FiBell, FiUser } from 'react-icons/fi';
+import { FiHome, FiAlertTriangle, FiMessageCircle, FiBell, FiUser } from '../utils/iconCompat';
 
 const ResidentLayout = ({ children, activeScreen, onNavigate, title }) => {
   const menuItems = [

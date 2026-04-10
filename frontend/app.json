@@ -4,8 +4,17 @@
     "slug": "society-hub",
     "version": "1.0.0",
     "scheme": "societyhub",
-    "web": { "bundler": "metro" },
+    "icon": "./assets/branding/app-icon.png",
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/branding/app-icon.png"
+    },
     "ios": { "supportsTablet": true },
-    "android": { "adaptiveIcon": { "backgroundColor": "#FFFFFF" } }
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/branding/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      }
+    }
   }
 }

@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { IoLocation } from 'react-icons/io5';
+import { IoLocation } from '../utils/iconCompat';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 

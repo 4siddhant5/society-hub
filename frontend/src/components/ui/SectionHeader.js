@@ -1,9 +1,8 @@
-import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet
-} from "react-native";
+import React, { memo } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import colors from '../../design/colors';
+import spacing from '../../design/spacing';
+import typography from '../../design/typography';
 
 const SectionHeader = ({ title, subtitle, rightComponent }) => {
   return (
@@ -23,24 +22,25 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    marginTop: 24,
-    marginBottom: 12,
+    alignItems: 'flex-end',
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
   },
   textContainer: {
     flex: 1,
   },
   title: {
-    fontSize: 20,
+    ...typography.section,
     fontWeight: '700',
-    color: '#1e293b',
   },
   subtitle: {
+    marginTop: 4,
     fontSize: 14,
-    color: '#64748b',
-    marginTop: 2,
+    lineHeight: 20,
+    color: colors.textSecondary,
   },
 });
 
-export default SectionHeader;
+export default memo(SectionHeader);

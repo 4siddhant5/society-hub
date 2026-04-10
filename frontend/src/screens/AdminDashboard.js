@@ -9,17 +9,15 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as DocumentPicker from 'expo-document-picker';
 import { useAuth } from '../context/AuthContext';
 import { updateIssueStatus, resolveIssue } from '../services/issueService';
-import { uploadImage, uploadDocument } from '../services/cloudinaryService';
-import { deleteAnnouncement, updateAnnouncement } from '../services/announcementService';
+import { uploadImage } from '../services/cloudinaryService';
+import { deleteAnnouncement } from '../services/announcementService';
 import { db } from '../config/firebase';
 import {
   collection,
   query,
   where,
-  getDocs,
   doc,
   updateDoc,
   getDoc,
@@ -47,6 +45,7 @@ import ProfileScreen from './ProfileScreen';
 import MembersScreen from './MembersScreen';
 import GroupInfoScreen from './GroupInfoScreen';
 import EditProfileScreen from './EditProfileScreen';
+import SettingsScreen from './SettingsScreen';
 import SOSAlertsScreen from './SOSAlertsScreen';
 import BroadcastScreen from './BroadcastScreen';
 import CreateAnnouncementScreen from './CreateAnnouncementScreen';
@@ -75,10 +74,13 @@ const SCREEN_TITLES = {
   ProfileScreen: 'Profile',
   EditProfile: 'Edit Profile',
   EditProfileScreen: 'Edit Profile',
+  Settings: 'Settings',
+  SettingsScreen: 'Settings',
   Members: 'Members',
   MembersScreen: 'Members',
   CreateAnnouncement: 'Create Announcement',
   CreateAnnouncementScreen: 'Create Announcement',
+  EditAnnouncement: 'Update Announcement',
   CreatePoll: 'Create Poll',
   CreatePollScreen: 'Create Poll',
   IssueDetail: 'Issue Detail',
@@ -576,7 +578,7 @@ export default function AdminDashboard() {
           />
         );
       case 'Polls':
-        return <AdminPollsScreen polls={polls} handleClosePoll={handleClosePoll} onNavigate={navigate} />;
+        return <AdminPollsScreen polls={polls} handleClosePoll={handleClosePoll} onNavigate={navigate} totalUsers={stats.residents} />;
       case 'SOSAlerts':
       case 'SOSAlertsScreen':
         return <SOSAlertsScreen goBack={goBack} />;
@@ -595,12 +597,23 @@ export default function AdminDashboard() {
       case 'EditProfile':
       case 'EditProfileScreen':
         return <EditProfileScreen navigation={{ navigate, goBack }} userId={current.params?.userId} />;
+      case 'Settings':
+      case 'SettingsScreen':
+        return <SettingsScreen navigation={{ navigate, goBack }} />;
       case 'Members':
       case 'MembersScreen':
         return <MembersScreen goBack={goBack} onViewProfile={(id) => navigate('Profile', { userId: id })} />;
       case 'CreateAnnouncement':
       case 'CreateAnnouncementScreen':
         return <CreateAnnouncementScreen navigation={{ navigate, goBack }} goBack={goBack} />;
+      case 'EditAnnouncement':
+        return (
+          <CreateAnnouncementScreen
+            navigation={{ navigate, goBack }}
+            goBack={goBack}
+            announcement={current.params?.announcement}
+          />
+        );
       case 'CreatePoll':
       case 'CreatePollScreen':
         return <CreatePollScreen navigation={{ navigate, goBack }} goBack={goBack} />;
