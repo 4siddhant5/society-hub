@@ -1,136 +1,161 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Pressable,
-  Platform,
-  Alert,
-  TextInput,
-  useWindowDimensions,
-} from 'react-native';
+import { Alert, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
+import { addDoc, collection, getDocs, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { addDoc, collection, getDocs, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 
-const TABS = [
-  { key: 'create', label: '✦ Book', icon: '🏟️' },
-  { key: 'public', label: '👁 Public', icon: '📋' },
-  { key: 'mine', label: '📌 Mine', icon: '🗂️' },
-];
-
-const FACILITIES = ['Gym', 'Community Hall', 'Swimming Pool'];
-const TIME_SLOTS = ['Morning', 'Afternoon', 'Evening', 'Night'];
-
+const TABS = [{ key: 'book', label: 'Book' }, { key: 'mine', label: 'My Bookings' }, { key: 'calendar', label: 'Calendar' }];
+const DEFAULT_FACILITY = 'Gym';
+const OTHER_FACILITY = 'Other';
+const FACILITIES = ['Gym', 'Community Hall', 'Swimming Pool', 'Parking', 'Garden Area', OTHER_FACILITY];
 const FACILITY_META = {
-  Gym: { icon: '🏋️', color: '#7c3aed', accent: 'rgba(124,58,237,0.12)' },
-  'Community Hall': { icon: '🏛️', color: '#0891b2', accent: 'rgba(8,145,178,0.12)' },
-  'Swimming Pool': { icon: '🏊', color: '#0284c7', accent: 'rgba(2,132,199,0.12)' },
+  Gym: { short: 'GY', color: '#2563eb', accent: 'rgba(37,99,235,0.12)' },
+  'Community Hall': { short: 'CH', color: '#0f766e', accent: 'rgba(15,118,110,0.12)' },
+  'Swimming Pool': { short: 'SP', color: '#0284c7', accent: 'rgba(2,132,199,0.12)' },
+  Parking: { short: 'PK', color: '#ea580c', accent: 'rgba(234,88,12,0.12)' },
+  'Garden Area': { short: 'GA', color: '#15803d', accent: 'rgba(21,128,61,0.12)' },
+  Other: { short: '+', color: '#7c3aed', accent: 'rgba(124,58,237,0.12)' },
+};
+const STATUS_LABEL = { pending: 'Pending', approved: 'Approved', rejected: 'Rejected' };
+const LEGACY_SLOT_ORDER = { Morning: 480, Afternoon: 780, Evening: 1020, Night: 1260 };
+
+const pad = (value) => String(value).padStart(2, '0');
+const todayString = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+const getFlatNumber = (u) => u?.flatNumber || u?.flatNo || u?.flat || u?.apartmentNumber || 'N/A';
+const normalizeBooking = (docSnap) => ({ id: docSnap.id, ...docSnap.data() });
+const normalizeTabKey = (v) => (v === 'create' ? 'book' : v === 'public' ? 'calendar' : v === 'mine' || v === 'calendar' || v === 'book' ? v : 'book');
+const sortByCreatedAtDesc = (list) => [...list].sort((a, b) => (b?.createdAt || 0) - (a?.createdAt || 0));
+const getDateValue = (value) => {
+  if (!value) return 0;
+  const iso = new Date(`${value}T00:00:00`).getTime();
+  if (!Number.isNaN(iso)) return iso;
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+const formatDate = (value, options = { day: 'numeric', month: 'short', year: 'numeric' }) => {
+  const time = getDateValue(value);
+  return time ? new Date(time).toLocaleDateString(undefined, options) : value || 'Upcoming';
+};
+const isTodayDate = (value) => getDateValue(value) === getDateValue(todayString());
+const isUpcomingDate = (value) => getDateValue(value) > getDateValue(todayString());
+const timeToMinutes = (value) => {
+  const [h, m] = String(value || '').split(':').map(Number);
+  return Number.isNaN(h) || Number.isNaN(m) ? NaN : h * 60 + m;
+};
+const timeToDate = (value) => {
+  const d = new Date();
+  const [h, m] = String(value || '09:00').split(':').map(Number);
+  d.setHours(Number.isNaN(h) ? 9 : h, Number.isNaN(m) ? 0 : m, 0, 0);
+  return d;
+};
+const dateToTime = (value) => `${pad(value.getHours())}:${pad(value.getMinutes())}`;
+const displayTime = (value) => {
+  const mins = timeToMinutes(value);
+  if (Number.isNaN(mins)) return value || 'Select time';
+  const h24 = Math.floor(mins / 60);
+  const m = mins % 60;
+  const suffix = h24 >= 12 ? 'PM' : 'AM';
+  const h12 = h24 % 12 || 12;
+  return `${h12}:${pad(m)} ${suffix}`;
+};
+const parseDisplayMinutes = (value) => {
+  const match = String(value || '').trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return NaN;
+  const h = Number(match[1]);
+  const m = Number(match[2]);
+  const s = match[3].toUpperCase();
+  const normalized = s === 'PM' && h !== 12 ? h + 12 : s === 'AM' && h === 12 ? 0 : h;
+  return normalized * 60 + m;
+};
+const timeRangeLabel = (start, end) => `${displayTime(start)} - ${displayTime(end)}`;
+const sortSlotValue = (slot) => {
+  if (!slot) return Number.MAX_SAFE_INTEGER;
+  if (LEGACY_SLOT_ORDER[slot]) return LEGACY_SLOT_ORDER[slot];
+  const parsed = parseDisplayMinutes(String(slot).split(' - ')[0]);
+  return Number.isNaN(parsed) ? Number.MAX_SAFE_INTEGER : parsed;
+};
+const groupBookingsByDate = (bookings) => {
+  const groups = bookings.reduce((acc, booking) => {
+    const key = booking.date || 'Upcoming';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(booking);
+    return acc;
+  }, {});
+  return Object.entries(groups)
+    .sort((a, b) => getDateValue(a[0]) - getDateValue(b[0]))
+    .map(([date, items]) => ({ date, items: items.sort((a, b) => sortSlotValue(a.timeSlot) - sortSlotValue(b.timeSlot)) }));
+};
+const facilityMeta = (facility) => FACILITY_META[facility] || {
+  short: String(facility || 'BK').split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || 'BK',
+  color: '#4f46e5',
+  accent: 'rgba(79,70,229,0.12)',
 };
 
-const SLOT_META = {
-  Morning: { icon: '🌅', color: '#d97706' },
-  Afternoon: { icon: '☀️', color: '#ea580c' },
-  Evening: { icon: '🌆', color: '#7c3aed' },
-  Night: { icon: '🌙', color: '#1d4ed8' },
-};
+const OverviewStat = ({ label, value, tone }) => (
+  <View style={[styles.stat, { backgroundColor: tone.bg, borderColor: tone.border }]}>
+    <Text style={[styles.statValue, { color: tone.value }]}>{value}</Text>
+    <Text style={[styles.statLabel, { color: tone.label }]}>{label}</Text>
+  </View>
+);
 
-const STATUS_META = {
-  pending: { bg: '#fef3c7', text: '#92400e', label: 'Pending' },
-  approved: { bg: '#dcfce7', text: '#166534', label: 'Approved' },
-  rejected: { bg: '#fee2e2', text: '#991b1b', label: 'Rejected' },
-};
-
-const getFlatNumber = (userData) =>
-  userData?.flatNumber ||
-  userData?.flatNo ||
-  userData?.flat ||
-  userData?.apartmentNumber ||
-  'N/A';
-
-const normalizeBooking = (docSnap) => ({
-  id: docSnap.id,
-  ...docSnap.data(),
-});
-
-const sortByCreatedAtDesc = (list) =>
-  [...list].sort((a, b) => {
-    const aTime = typeof a.createdAt === 'number' ? a.createdAt : 0;
-    const bTime = typeof b.createdAt === 'number' ? b.createdAt : 0;
-    return bTime - aTime;
-  });
-
-const getStatusStyle = (status) => {
-  switch (status) {
-    case 'approved':
-      return styles.statusApproved;
-    case 'rejected':
-      return styles.statusRejected;
-    case 'pending':
-    default:
-      return styles.statusPending;
-  }
-};
-
-const BookingCard = ({ item, isDark, showBookedBy, showRejectionReason, isCompact }) => {
-  const status = STATUS_META[item.status] || STATUS_META.pending;
-  const textColor = isDark ? '#ffffff' : '#1e293b';
-  const subTextColor = isDark ? '#cbd5e1' : '#64748b';
-  const facilityMeta = FACILITY_META[item.facility] || { icon: '🏢', color: '#2563eb', accent: 'rgba(37,99,235,0.1)' };
-  const slotMeta = SLOT_META[item.timeSlot] || { icon: '⏰', color: '#64748b' };
-  const metaItems = [
-    { label: '📅 Date', value: item.date || 'N/A' },
-    { label: `${slotMeta.icon} Time`, value: item.timeSlot || 'N/A' },
-    { label: '🏠 Flat', value: item.flatNumber || 'N/A' },
-  ];
-
+const PickerField = ({ isDark, label, value, placeholder, mode, min, onWebChange, onPress, containerStyle }) => {
+  const borderColor = isDark ? '#334155' : '#dbe4f0';
+  const surface = isDark ? '#0f172a' : '#f8fafc';
+  const textColor = isDark ? '#f8fafc' : '#0f172a';
+  const muted = isDark ? '#94a3b8' : '#64748b';
   return (
-    <Pressable
-      style={({ hovered }) => [
-        styles.bookingCard,
-        isDark && styles.bookingCardDark,
-        hovered && styles.bookingCardHovered,
-      ]}
-    >
-      {/* Colored top accent bar */}
-      <View style={[styles.cardAccentBar, { backgroundColor: facilityMeta.color }]} />
-
-      <View style={[styles.cardInner]}>
-        <View style={styles.cardHeader}>
-          <View style={[styles.facilityIconBadge, { backgroundColor: facilityMeta.accent }]}>
-            <Text style={styles.facilityIcon}>{facilityMeta.icon}</Text>
-          </View>
-          <Text style={[styles.cardTitle, { color: textColor }]}>{item.facility}</Text>
-          <View style={[styles.status, getStatusStyle(item.status)]}>
-            <Text style={styles.statusText}>{status.label}</Text>
-          </View>
+    <View style={[styles.field, containerStyle]}>
+      <Text style={[styles.label, { color: textColor }]}>{label}</Text>
+      {Platform.OS === 'web' ? (
+        <View style={[styles.webField, { borderColor, backgroundColor: surface }]}>
+          <input
+            type={mode}
+            value={value}
+            min={min}
+            onChange={(e) => onWebChange(e.target.value)}
+            style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', color: textColor, fontSize: 15, fontFamily: 'inherit', padding: 0 }}
+          />
+          <Text style={[styles.fieldHint, { color: value ? textColor : muted }]}>{value ? (mode === 'date' ? formatDate(value) : displayTime(value)) : placeholder}</Text>
         </View>
+      ) : (
+        <Pressable onPress={onPress} style={({ hovered, pressed }) => [styles.nativeField, { borderColor, backgroundColor: surface }, hovered && styles.hoverLift, pressed && styles.pressed]}>
+          <Text style={[styles.nativeValue, { color: value ? textColor : muted }]}>{value ? (mode === 'date' ? formatDate(value) : displayTime(value)) : placeholder}</Text>
+          <Text style={[styles.fieldHint, { color: muted }]}>{mode === 'date' ? 'Calendar' : 'Time picker'}</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+};
 
-        <View style={styles.bookingInfo}>
-          <Text style={[styles.userInfo, { color: subTextColor }]}>
-            {showBookedBy
-              ? `👤 Booked by ${item.userName || 'Resident'}`
-              : `🏠 Flat ${item.flatNumber || 'N/A'}`}
-          </Text>
-        </View>
-
-        <View style={[styles.metaGrid, isCompact && styles.metaGridCompact]}>
-          {metaItems.map((meta) => (
-            <View key={meta.label} style={[styles.metaItem, isCompact && styles.metaItemCompact]}>
-              <Text style={[styles.metaLabel, { color: subTextColor }]}>{meta.label}</Text>
-              <Text style={[styles.metaValue, { color: textColor }]}>{meta.value}</Text>
-            </View>
-          ))}
-        </View>
-
-        {showRejectionReason && item.status === 'rejected' && !!item.rejectionReason && (
-          <View style={styles.reasonBox}>
-            <Text style={styles.reasonText}>⚠️ Reason: {item.rejectionReason}</Text>
+const BookingCard = ({ item, isDark, showBookedBy, showRejectionReason, compact, highlight }) => {
+  const meta = facilityMeta(item.facility);
+  const textColor = isDark ? '#f8fafc' : '#0f172a';
+  const subtle = isDark ? '#cbd5e1' : '#64748b';
+  const flatLabel = `Flat ${item.flatNumber || 'N/A'}`;
+  const bookedByLabel = `Booked by ${item.userName || 'Resident'}`;
+  return (
+    <Pressable style={({ hovered }) => [styles.card, isDark && styles.cardDark, highlight === 'today' && styles.cardToday, highlight === 'upcoming' && styles.cardUpcoming, hovered && styles.cardHover]}>
+      <View style={[styles.cardBar, { backgroundColor: meta.color }]} />
+      <View style={styles.cardBody}>
+        <View style={[styles.cardHead, compact && styles.cardHeadCompact]}>
+          <View style={styles.cardHeadLeft}>
+            <Text style={[styles.cardTitle, { color: textColor }]} numberOfLines={2}>{item.facility}</Text>
           </View>
-        )}
+          <View style={[styles.status, styles[`status_${item.status || 'pending'}`]]}><Text style={styles.statusText}>{STATUS_LABEL[item.status] || STATUS_LABEL.pending}</Text></View>
+        </View>
+        <View style={[styles.cardMetaRow, compact && styles.cardMetaRowCompact]}>
+          <Text style={[styles.cardMetaText, { color: subtle }]} numberOfLines={compact ? 2 : 1}>{formatDate(item.date, { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
+          {!compact ? <Text style={[styles.cardMetaDivider, { color: subtle }]}>|</Text> : null}
+          <Text style={[styles.cardMetaText, { color: subtle }]} numberOfLines={compact ? 2 : 1}>{item.timeSlot || 'N/A'}</Text>
+          {!compact ? <Text style={[styles.cardMetaDivider, { color: subtle }]}>|</Text> : null}
+          <Text style={[styles.cardMetaText, { color: subtle }]} numberOfLines={1}>{flatLabel}</Text>
+        </View>
+        {showBookedBy ? <Text style={[styles.cardAuxText, { color: subtle }]} numberOfLines={1}>{bookedByLabel}</Text> : null}
+        {showRejectionReason && item.status === 'rejected' && !!item.rejectionReason ? (
+          <View style={styles.reasonBox}><Text style={styles.reasonText}>Reason: {item.rejectionReason}</Text></View>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -140,76 +165,93 @@ export default function BookingScreen({ goBack, initialTab = 'create' }) {
   const { user, userData } = useAuth();
   const { isDark } = useTheme();
   const { width } = useWindowDimensions();
-  const isCompact = width <= 768;
+  const compact = width <= 768;
+  const today = useMemo(() => todayString(), []);
 
-  const [activeTab, setActiveTab] = useState(initialTab);
-  const [facility, setFacility] = useState('Gym');
+  const [activeTab, setActiveTab] = useState(normalizeTabKey(initialTab));
+  const [facility, setFacility] = useState(DEFAULT_FACILITY);
+  const [otherFacility, setOtherFacility] = useState('');
   const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
   const [loading, setLoading] = useState(false);
   const [approvedBookings, setApprovedBookings] = useState([]);
   const [myBookings, setMyBookings] = useState([]);
+  const [iosPicker, setIosPicker] = useState(null);
 
-  useEffect(() => {
-    setActiveTab(initialTab);
-  }, [initialTab]);
+  useEffect(() => { setActiveTab(normalizeTabKey(initialTab)); }, [initialTab]);
 
   useEffect(() => {
     if (!userData?.societyId) return undefined;
+    const approvedQuery = query(collection(db, 'bookings', userData.societyId, 'entries'), where('status', '==', 'approved'));
+    const unsubApproved = onSnapshot(approvedQuery, (snapshot) => setApprovedBookings(sortByCreatedAtDesc(snapshot.docs.map(normalizeBooking))));
 
-    const approvedQuery = query(
-      collection(db, 'bookings', userData.societyId, 'entries'),
-      where('status', '==', 'approved')
-    );
-
-    const unsubscribeApproved = onSnapshot(approvedQuery, (snapshot) => {
-      setApprovedBookings(sortByCreatedAtDesc(snapshot.docs.map(normalizeBooking)));
-    });
-
-    let unsubscribeMine = () => {};
+    let unsubMine = () => {};
     if (user?.uid) {
-      const mineQuery = query(
-        collection(db, 'bookings', userData.societyId, 'entries'),
-        where('userId', '==', user.uid)
-      );
-
-      unsubscribeMine = onSnapshot(mineQuery, (snapshot) => {
-        setMyBookings(sortByCreatedAtDesc(snapshot.docs.map(normalizeBooking)));
-      });
+      const mineQuery = query(collection(db, 'bookings', userData.societyId, 'entries'), where('userId', '==', user.uid));
+      unsubMine = onSnapshot(mineQuery, (snapshot) => setMyBookings(sortByCreatedAtDesc(snapshot.docs.map(normalizeBooking))));
     } else {
       setMyBookings([]);
     }
 
     return () => {
-      unsubscribeApproved();
-      unsubscribeMine();
+      unsubApproved();
+      unsubMine();
     };
   }, [user?.uid, userData?.societyId]);
 
-  const publicEmptyMessage = useMemo(
-    () => (approvedBookings.length === 0 ? 'No approved bookings yet.' : null),
-    [approvedBookings.length]
-  );
+  const selectedFacility = facility === OTHER_FACILITY ? otherFacility.trim() : facility;
+  const pendingCount = useMemo(() => myBookings.filter((item) => item.status === 'pending').length, [myBookings]);
+  const calendarGroups = useMemo(() => groupBookingsByDate(approvedBookings), [approvedBookings]);
+  const timeError = useMemo(() => !startTime || !endTime ? '' : timeToMinutes(endTime) <= timeToMinutes(startTime) ? 'End time must be later than start time.' : '', [endTime, startTime]);
+  const timeSlot = useMemo(() => (!startTime || !endTime || timeError ? '' : timeRangeLabel(startTime, endTime)), [endTime, startTime, timeError]);
+  const tabCounts = useMemo(() => ({ mine: myBookings.length, calendar: approvedBookings.length }), [approvedBookings.length, myBookings.length]);
 
-  const myEmptyMessage = useMemo(
-    () => (myBookings.length === 0 ? 'No personal bookings yet.' : null),
-    [myBookings.length]
-  );
+  const pickerConfig = (field) => field === 'date'
+    ? { field, mode: 'date', title: 'Select booking date', value: date ? new Date(`${date}T12:00:00`) : new Date(`${today}T12:00:00`), minimumDate: new Date(`${today}T00:00:00`) }
+    : { field, mode: 'time', title: field === 'start' ? 'Select start time' : 'Select end time', value: timeToDate(field === 'start' ? startTime : endTime) };
 
-  const tabCounts = useMemo(
-    () => ({
-      public: approvedBookings.length,
-      mine: myBookings.length,
-    }),
-    [approvedBookings.length, myBookings.length]
-  );
+  const applyPickerValue = (field, selected) => {
+    if (!selected) return;
+    if (field === 'date') {
+      setDate(`${selected.getFullYear()}-${pad(selected.getMonth() + 1)}-${pad(selected.getDate())}`);
+      return;
+    }
+    if (field === 'start') {
+      setStartTime(dateToTime(selected));
+      return;
+    }
+    setEndTime(dateToTime(selected));
+  };
+
+  const openPicker = (field) => {
+    const config = pickerConfig(field);
+    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'android') {
+      DateTimePickerAndroid.open({
+        value: config.value,
+        mode: config.mode,
+        display: config.mode === 'date' ? 'default' : 'clock',
+        is24Hour: false,
+        minimumDate: config.minimumDate,
+        onChange: (event, selected) => {
+          if (event.type === 'set' && selected) applyPickerValue(field, selected);
+        },
+      });
+      return;
+    }
+    setIosPicker(config);
+  };
 
   const handleSubmit = async () => {
-    if (!facility || !date || !time) {
+    if (!selectedFacility || !date || !timeSlot) {
       Alert.alert('Error', 'Please fill all fields');
       return;
     }
-
+    if (timeError) {
+      Alert.alert('Invalid time range', timeError);
+      return;
+    }
     if (!user?.uid || !userData?.societyId) {
       Alert.alert('Error', 'User details not found');
       return;
@@ -218,18 +260,9 @@ export default function BookingScreen({ goBack, initialTab = 'create' }) {
     setLoading(true);
     try {
       const bookingCollection = collection(db, 'bookings', userData.societyId, 'entries');
-      const conflictQuery = query(
-        bookingCollection,
-        where('facility', '==', facility),
-        where('date', '==', date),
-        where('timeSlot', '==', time)
-      );
-
+      const conflictQuery = query(bookingCollection, where('facility', '==', selectedFacility), where('date', '==', date), where('timeSlot', '==', timeSlot));
       const conflictSnapshot = await getDocs(conflictQuery);
-      const hasConflict = conflictSnapshot.docs.some((docSnap) => {
-        const status = docSnap.data()?.status;
-        return status === 'approved' || status === 'pending';
-      });
+      const hasConflict = conflictSnapshot.docs.some((docSnap) => ['approved', 'pending'].includes(docSnap.data()?.status));
 
       if (hasConflict) {
         Alert.alert('Booking Unavailable', 'Slot already booked or pending approval');
@@ -241,9 +274,9 @@ export default function BookingScreen({ goBack, initialTab = 'create' }) {
         userId: user.uid,
         userName: userData?.name || userData?.fullName || 'Resident',
         flatNumber: getFlatNumber(userData),
-        facility,
+        facility: selectedFacility,
         date,
-        timeSlot: time,
+        timeSlot,
         status: 'pending',
         rejectionReason: '',
         createdAt: Date.now(),
@@ -254,9 +287,11 @@ export default function BookingScreen({ goBack, initialTab = 'create' }) {
       await updateDoc(bookingRef, { id: bookingRef.id });
 
       Alert.alert('Success', 'Booking request submitted for approval');
+      setFacility(DEFAULT_FACILITY);
+      setOtherFacility('');
       setDate('');
-      setTime('');
-      setFacility('Gym');
+      setStartTime('');
+      setEndTime('');
       setActiveTab('mine');
     } catch (error) {
       console.error(error);
@@ -266,666 +301,382 @@ export default function BookingScreen({ goBack, initialTab = 'create' }) {
     }
   };
 
-  const bg = isDark ? '#121212' : '#f8fafc';
-  const textColor = isDark ? '#ffffff' : '#1e293b';
-  const cardBg = isDark ? '#1e1e1e' : '#ffffff';
-  const borderColor = isDark ? '#334155' : '#e2e8f0';
-  const subTextColor = isDark ? '#cbd5e1' : '#64748b';
+  const bg = isDark ? '#020617' : '#f8fbff';
+  const cardBg = isDark ? '#0f172a' : '#ffffff';
+  const surface = isDark ? '#111827' : '#f8fafc';
+  const textColor = isDark ? '#f8fafc' : '#0f172a';
+  const subtle = isDark ? '#94a3b8' : '#64748b';
+  const border = isDark ? '#334155' : '#dbe4f0';
+  const helperBg = isDark ? 'rgba(37,99,235,0.12)' : '#eff6ff';
 
-  const renderCreateTab = () => (
-    <View style={[styles.formCard, { backgroundColor: cardBg, borderColor }]}>
-      {/* Section: Facility */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionIcon}>🏟️</Text>
-        <Text style={[styles.label, { color: textColor, marginBottom: 0, marginTop: 0 }]}>Choose Facility</Text>
-      </View>
-      <View style={styles.buttonGroup}>
-        {FACILITIES.map((item) => {
-          const fm = FACILITY_META[item];
-          const isSelected = facility === item;
-          return (
-            <TouchableOpacity
-              key={item}
-              style={[
-                styles.optionBtn,
-                { borderColor: isSelected ? fm.color : borderColor },
-                isSelected && { backgroundColor: fm.color, borderColor: fm.color },
-              ]}
-              onPress={() => setFacility(item)}
-            >
-              <Text style={{ fontSize: 16 }}>{fm.icon}</Text>
-              <Text
-                style={{
-                  color: isSelected ? '#fff' : textColor,
-                  fontWeight: isSelected ? '700' : '500',
-                  fontSize: 13,
-                }}
+  const renderCreate = () => (
+    <View style={[styles.formCard, { backgroundColor: cardBg, borderColor: border }]}>
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: textColor }]}>Facility</Text>
+        <View style={[styles.facilityGrid, compact && styles.facilityGridCompact]}>
+          {FACILITIES.map((item) => {
+            const meta = facilityMeta(item);
+            const selected = facility === item;
+            return (
+              <Pressable
+                key={item}
+                onPress={() => setFacility(item)}
+                style={({ hovered, pressed }) => [styles.facilityOption, compact && styles.facilityOptionCompact, { borderColor: selected ? meta.color : border, backgroundColor: selected ? meta.color : surface }, hovered && styles.hoverLift, pressed && styles.pressed]}
               >
-                {item}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+                <View style={[styles.optionBadge, { backgroundColor: selected ? 'rgba(255,255,255,0.18)' : meta.accent }]}>
+                  <Text style={[styles.optionBadgeText, { color: selected ? '#ffffff' : meta.color }]}>{meta.short}</Text>
+                </View>
+                <Text style={[styles.optionText, { color: selected ? '#ffffff' : textColor }]}>{item === OTHER_FACILITY ? '+ Other' : item}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {facility === OTHER_FACILITY ? (
+          <View style={styles.otherField}>
+            <Text style={[styles.label, { color: textColor }]}>Other facility</Text>
+            <TextInput
+              value={otherFacility}
+              onChangeText={setOtherFacility}
+              placeholder="Enter facility name"
+              placeholderTextColor="#94a3b8"
+              style={[styles.textInput, { color: textColor, borderColor: border, backgroundColor: surface }]}
+            />
+          </View>
+        ) : null}
       </View>
 
-      {/* Section: Date */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionIcon}>📅</Text>
-        <Text style={[styles.label, { color: textColor, marginBottom: 0, marginTop: 0 }]}>Select Date</Text>
-      </View>
-      {Platform.OS === 'web' ? (
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          style={{
-            padding: '12px 14px',
-            borderRadius: 10,
-            border: `1.5px solid ${borderColor}`,
-            backgroundColor: isDark ? '#1e293b' : '#f8fafc',
-            color: textColor,
-            marginBottom: 20,
-            marginTop: 8,
-            width: '100%',
-            boxSizing: 'border-box',
-            fontSize: 15,
-            fontFamily: 'inherit',
-            outline: 'none',
-            cursor: 'pointer',
-          }}
-        />
-      ) : (
-        <TextInput
-          style={[styles.textInput, { color: textColor, borderColor, backgroundColor: isDark ? '#1e293b' : '#f8fafc' }]}
-          value={date}
-          onChangeText={setDate}
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor="#94a3b8"
-        />
-      )}
-
-      {/* Section: Time Slot */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionIcon}>⏰</Text>
-        <Text style={[styles.label, { color: textColor, marginBottom: 0, marginTop: 0 }]}>Time Slot</Text>
-      </View>
-      <View style={styles.buttonGroup}>
-        {TIME_SLOTS.map((slot) => {
-          const sm = SLOT_META[slot];
-          const isSelected = time === slot;
-          return (
-            <TouchableOpacity
-              key={slot}
-              style={[
-                styles.optionBtn,
-                { borderColor: isSelected ? sm.color : borderColor },
-                isSelected && { backgroundColor: sm.color, borderColor: sm.color },
-              ]}
-              onPress={() => setTime(slot)}
-            >
-              <Text style={{ fontSize: 16 }}>{sm.icon}</Text>
-              <Text
-                style={{
-                  color: isSelected ? '#fff' : textColor,
-                  fontWeight: isSelected ? '700' : '500',
-                  fontSize: 13,
-                }}
-              >
-                {slot}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+      <View style={styles.section}>
+        <Text style={[styles.sectionTitle, { color: textColor }]}>Schedule</Text>
+        <View style={[styles.scheduleGrid, compact && styles.scheduleGridCompact]}>
+          <PickerField
+            isDark={isDark}
+            label="Date"
+            value={date}
+            placeholder="Select date"
+            mode="date"
+            min={today}
+            onWebChange={setDate}
+            onPress={() => openPicker('date')}
+            containerStyle={styles.scheduleFieldFull}
+          />
+          <PickerField
+            isDark={isDark}
+            label="Start time"
+            value={startTime}
+            placeholder="Select start time"
+            mode="time"
+            onWebChange={setStartTime}
+            onPress={() => openPicker('start')}
+            containerStyle={styles.scheduleField}
+          />
+          <PickerField
+            isDark={isDark}
+            label="End time"
+            value={endTime}
+            placeholder="Select end time"
+            mode="time"
+            onWebChange={setEndTime}
+            onPress={() => openPicker('end')}
+            containerStyle={styles.scheduleField}
+          />
+        </View>
+        {timeSlot ? (
+          <View style={[styles.preview, { backgroundColor: helperBg }]}>
+            <Text style={styles.previewLabel}>Selected time range</Text>
+            <Text style={[styles.previewValue, { color: textColor }]}>{timeSlot}</Text>
+          </View>
+        ) : null}
+        {timeError ? <Text style={styles.inlineError}>{timeError}</Text> : null}
       </View>
 
-      <View style={styles.helperContainer}>
-        <Text style={styles.helperIcon}>ℹ️</Text>
-        <Text style={[styles.helperText, { color: subTextColor, flex: 1 }]}>
-          Requests are saved as pending until an admin approves them.
-        </Text>
-      </View>
-
-      <TouchableOpacity
-        style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
-        onPress={handleSubmit}
-        disabled={loading}
-      >
-        <Text style={styles.submitText}>{loading ? '⏳ Submitting...' : '🚀 Submit Booking'}</Text>
+      <TouchableOpacity style={[styles.submit, (loading || !!timeError) && styles.disabled]} onPress={handleSubmit} disabled={loading || !!timeError}>
+        <Text style={styles.submitText}>{loading ? 'Submitting...' : 'Submit Booking'}</Text>
       </TouchableOpacity>
     </View>
   );
 
   const renderList = (data, emptyMessage, options = {}) => (
-    <View style={[styles.bookingList, isCompact && styles.bookingListCompact]}>
+    <View style={[styles.list, compact && styles.listCompact]}>
       {data.length === 0 ? (
-        <View style={[styles.emptyContainer, { backgroundColor: isDark ? '#1e293b' : '#f1f5f9' }]}>
-          <Text style={styles.emptyEmoji}>📭</Text>
-          <Text style={[styles.emptyText, { color: subTextColor }]}>{emptyMessage}</Text>
-        </View>
-      ) : (
-        data.map((item) => (
-          <BookingCard
-            key={item.id}
-            item={item}
-            isDark={isDark}
-            isCompact={isCompact}
-            showBookedBy={!!options.showBookedBy}
-            showRejectionReason={!!options.showRejectionReason}
-          />
-        ))
-      )}
+        <View style={[styles.empty, { backgroundColor: surface }]}><Text style={[styles.emptyText, { color: subtle }]}>{emptyMessage}</Text></View>
+      ) : data.map((item) => (
+        <BookingCard
+          key={item.id}
+          item={item}
+          isDark={isDark}
+          compact={compact}
+          showBookedBy={!!options.showBookedBy}
+          showRejectionReason={!!options.showRejectionReason}
+          highlight={isTodayDate(item.date) ? 'today' : isUpcomingDate(item.date) ? 'upcoming' : null}
+        />
+      ))}
+    </View>
+  );
+
+  const renderCalendar = () => (
+    <View style={styles.calendar}>
+      {calendarGroups.length === 0 ? (
+        <View style={[styles.empty, { backgroundColor: surface }]}><Text style={[styles.emptyText, { color: subtle }]}>No approved bookings in the calendar yet.</Text></View>
+      ) : calendarGroups.map((group) => {
+        const todayGroup = isTodayDate(group.date);
+        const upcomingGroup = isUpcomingDate(group.date);
+        return (
+          <View key={group.date} style={[styles.dayGroup, { backgroundColor: cardBg, borderColor: todayGroup ? '#60a5fa' : border }]}>
+            <View style={[styles.dayHead, compact && styles.dayHeadCompact]}>
+              <View style={styles.dayHeadLeft}>
+                <Text style={[styles.dayTitle, { color: textColor }]}>{formatDate(group.date, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</Text>
+                <View style={styles.dayTags}>
+                  {todayGroup ? <View style={[styles.dayTag, styles.dayTagToday]}><Text style={styles.dayTagText}>Today</Text></View> : null}
+                  {!todayGroup && upcomingGroup ? <View style={[styles.dayTag, styles.dayTagUpcoming]}><Text style={styles.dayTagText}>Upcoming</Text></View> : null}
+                </View>
+              </View>
+              <Text style={[styles.dayCount, { color: subtle }]}>{group.items.length} booking{group.items.length === 1 ? '' : 's'}</Text>
+            </View>
+            <View style={[styles.divider, { backgroundColor: border }]} />
+            <View style={[styles.list, compact && styles.listCompact]}>
+              {group.items.map((item) => (
+                <BookingCard key={item.id} item={item} isDark={isDark} compact={compact} highlight={todayGroup ? 'today' : upcomingGroup ? 'upcoming' : null} />
+              ))}
+            </View>
+          </View>
+        );
+      })}
     </View>
   );
 
   return (
-    <View style={[styles.bookingPage, { backgroundColor: bg }]}>
-      {/* Premium Header */}
-      <View style={[styles.header, isDark && styles.headerDark]}>
-        <View style={styles.headerLeft}>
-          {goBack && (
-            <TouchableOpacity onPress={goBack} style={styles.backBtn}>
-              <Text style={styles.backText}>‹ Back</Text>
-            </TouchableOpacity>
-          )}
-          <View>
-            <Text style={[styles.headerTitle, { color: textColor }]}>🏟️ Bookings</Text>
-            <Text style={[styles.headerSubtitle, { color: subTextColor }]}>Manage facility reservations</Text>
+    <View style={[styles.page, { backgroundColor: bg }]}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.topBar}>
+          {goBack ? <TouchableOpacity onPress={goBack} style={styles.backBtn}><Text style={styles.backText}>Back</Text></TouchableOpacity> : null}
+        </View>
+
+        <View style={styles.topSection}>
+          <View style={styles.stats}>
+            <OverviewStat label="Approved" value={approvedBookings.length} tone={{ bg: '#eff6ff', border: '#bfdbfe', value: '#1d4ed8', label: '#2563eb' }} />
+            <OverviewStat label="My Requests" value={myBookings.length} tone={{ bg: '#ecfeff', border: '#a5f3fc', value: '#0f766e', label: '#0891b2' }} />
+            <OverviewStat label="Pending" value={pendingCount} tone={{ bg: '#fff7ed', border: '#fed7aa', value: '#c2410c', label: '#ea580c' }} />
+          </View>
+
+          <View style={[styles.tabs, { backgroundColor: cardBg, borderColor: border }]}>
+            {TABS.map((tab) => {
+              const active = activeTab === tab.key;
+              const count = tabCounts[tab.key];
+              return (
+                <TouchableOpacity key={tab.key} style={[styles.tab, active && styles.tabActive]} onPress={() => setActiveTab(tab.key)}>
+                  <Text style={[styles.tabText, active && styles.tabTextActive]}>{tab.label}</Text>
+                  {typeof count === 'number' ? (
+                    <View style={[styles.tabCount, !active && styles.tabCountIdle]}>
+                      <Text style={[styles.tabCountText, !active && styles.tabCountTextIdle]}>{count}</Text>
+                    </View>
+                  ) : null}
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
-      </View>
 
-      <ScrollView
-        style={styles.bookingScroll}
-        contentContainerStyle={styles.bookingScrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.filters}>
-          {TABS.map((tab) => {
-            const isActive = activeTab === tab.key;
-            const count = tabCounts[tab.key];
-
-            return (
-              <TouchableOpacity
-                key={tab.key}
-                style={[styles.filterBtn, isActive && styles.filterBtnActive]}
-                onPress={() => setActiveTab(tab.key)}
-              >
-                <Text style={[styles.filterBtnText, isActive && styles.filterBtnTextActive]}>
-                  {tab.label}
-                </Text>
-                {typeof count === 'number' && (
-                  <View style={[styles.filterCount, !isActive && styles.filterCountInactive]}>
-                    <Text style={[styles.filterCountText, !isActive && styles.filterCountTextInactive]}>
-                      {count}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {activeTab === 'create' && renderCreateTab()}
-        {activeTab === 'public' && renderList(approvedBookings, publicEmptyMessage, { showBookedBy: true })}
-        {activeTab === 'mine' && renderList(myBookings, myEmptyMessage, { showRejectionReason: true })}
+        {activeTab === 'book' ? renderCreate() : null}
+        {activeTab === 'mine' ? renderList(myBookings, 'No personal bookings yet.', { showRejectionReason: true }) : null}
+        {activeTab === 'calendar' ? renderCalendar() : null}
       </ScrollView>
+
+      {Platform.OS === 'ios' && iosPicker ? (
+        <Modal transparent animationType="fade" visible onRequestClose={() => setIosPicker(null)}>
+          <View style={styles.modalBackdrop}>
+            <View style={[styles.modalCard, { backgroundColor: cardBg, borderColor: border }]}>
+              <View style={styles.modalHead}>
+                <Text style={[styles.modalTitle, { color: textColor }]}>{iosPicker.title}</Text>
+                <View style={styles.modalActions}>
+                  <TouchableOpacity onPress={() => setIosPicker(null)} style={styles.modalBtn}><Text style={[styles.modalBtnText, { color: subtle }]}>Cancel</Text></TouchableOpacity>
+                  <TouchableOpacity onPress={() => { applyPickerValue(iosPicker.field, iosPicker.value); setIosPicker(null); }} style={styles.modalBtn}><Text style={styles.modalBtnPrimary}>Done</Text></TouchableOpacity>
+                </View>
+              </View>
+              <DateTimePicker
+                value={iosPicker.value}
+                mode={iosPicker.mode}
+                display="spinner"
+                minimumDate={iosPicker.minimumDate}
+                onChange={(_, selected) => selected && setIosPicker((current) => current ? { ...current, value: selected } : current)}
+              />
+            </View>
+          </View>
+        </Modal>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  bookingPage: {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100%',
-    overflow: 'hidden',
-    flex: 1,
-    minHeight: 0,
-  },
-
-  // ─── Header ───────────────────────────────────────────────────────────────
-  header: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+  page: { flex: 1, minHeight: 0 },
+  scroll: { flex: 1, paddingHorizontal: 20, ...Platform.select({ web: { overflowY: 'auto', overflowX: 'hidden' }, default: {} }) },
+  scrollContent: { paddingTop: 18, paddingBottom: 32 },
+  topBar: { marginBottom: 10 },
+  backBtn: { alignSelf: 'flex-start', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, backgroundColor: 'rgba(37,99,235,0.09)' },
+  backText: { color: '#2563eb', fontSize: 14, fontWeight: '800' },
+  topSection: { marginBottom: 20, gap: 14 },
+  stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  stat: { flexGrow: 1, minWidth: 160, paddingHorizontal: 18, paddingVertical: 16, borderRadius: 20, borderWidth: 1 },
+  statValue: { fontSize: 26, lineHeight: 30, fontWeight: '900' },
+  statLabel: { marginTop: 5, fontSize: 12, fontWeight: '800' },
+  tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, padding: 8, borderRadius: 22, borderWidth: 1.5 },
+  tab: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    ...Platform.select({
-      web: {
-        backgroundImage: 'linear-gradient(135deg, rgba(37,99,235,0.04) 0%, rgba(59,130,246,0.02) 100%)',
-      },
-      default: {},
-    }),
-  },
-  headerDark: {
-    borderBottomColor: '#1e293b',
-    ...Platform.select({
-      web: {
-        backgroundImage: 'linear-gradient(135deg, rgba(37,99,235,0.08) 0%, rgba(30,41,59,0.3) 100%)',
-      },
-      default: {},
-    }),
-  },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  backBtn: {
-    marginRight: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: 'rgba(37,99,235,0.08)',
-  },
-  backText: { color: '#2563eb', fontSize: 15, fontWeight: '700' },
-  headerTitle: { fontSize: 22, fontWeight: '800', letterSpacing: -0.3 },
-  headerSubtitle: { fontSize: 12, marginTop: 2, fontWeight: '500' },
-
-  // ─── Scroll ───────────────────────────────────────────────────────────────
-  bookingScroll: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    ...Platform.select({
-      web: {
-        overflowY: 'auto',
-        overflowX: 'hidden',
-      },
-      default: {},
-    }),
-  },
-  bookingScrollContent: {
-    paddingBottom: 32,
-  },
-
-  // ─── Filter Tabs ──────────────────────────────────────────────────────────
-  filters: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 20,
-  },
-  filterBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
+    gap: 8,
+    flexGrow: 1,
+    minWidth: 120,
     paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 999,
-    backgroundColor: '#f1f5f9',
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-        transitionDuration: '200ms',
-        transitionProperty: 'all',
-        transitionTimingFunction: 'ease',
-      },
-      default: {},
-    }),
+    paddingVertical: 12,
+    borderRadius: 16,
+    backgroundColor: '#f8fafc',
+    ...Platform.select({ web: { cursor: 'pointer', transitionDuration: '220ms', transitionProperty: 'transform, box-shadow, background-color' }, default: {} }),
   },
-  filterBtnActive: {
+  tabActive: {
     backgroundColor: '#2563eb',
-    borderColor: '#1d4ed8',
     ...Platform.select({
-      web: {
-        backgroundImage: 'linear-gradient(135deg, #1d4ed8, #3b82f6)',
-        boxShadow: '0 4px 14px rgba(37,99,235,0.4)',
-      },
-      default: {
-        shadowColor: '#2563eb',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.35,
-        shadowRadius: 12,
-        elevation: 6,
-      },
+      web: { backgroundImage: 'linear-gradient(135deg, #1d4ed8, #3b82f6)', boxShadow: '0 12px 24px rgba(37,99,235,0.22)' },
+      default: { shadowColor: '#2563eb', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.24, shadowRadius: 18, elevation: 4 },
     }),
   },
-  filterBtnText: { fontSize: 13, color: '#475569', fontWeight: '700' },
-  filterBtnTextActive: { color: '#fff' },
-  filterCount: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 999,
-    minWidth: 22,
-    alignItems: 'center',
-  },
-  filterCountInactive: {
-    backgroundColor: '#dbeafe',
-  },
-  filterCountText: {
-    color: '#ffffff',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  filterCountTextInactive: {
-    color: '#2563eb',
-  },
-
-  // ─── Form Card ────────────────────────────────────────────────────────────
+  tabText: { color: '#475569', fontSize: 13, fontWeight: '800' },
+  tabTextActive: { color: '#ffffff' },
+  tabCount: { minWidth: 24, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.24)' },
+  tabCountIdle: { backgroundColor: '#dbeafe' },
+  tabCountText: { color: '#ffffff', fontSize: 11, fontWeight: '900' },
+  tabCountTextIdle: { color: '#2563eb' },
   formCard: {
+    borderRadius: 28,
+    borderWidth: 1.5,
     padding: 22,
-    borderRadius: 20,
-    borderWidth: 1.5,
     ...Platform.select({
-      web: {
-        boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
-      },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.06,
-        shadowRadius: 16,
-        elevation: 3,
-      },
+      web: { boxShadow: '0 18px 40px rgba(15,23,42,0.08)' },
+      default: { shadowColor: '#0f172a', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.08, shadowRadius: 20, elevation: 4 },
     }),
   },
-  sectionHeader: {
+  section: { marginBottom: 24 },
+  sectionTitle: { fontSize: 17, lineHeight: 22, fontWeight: '800' },
+  facilityGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 14, ...Platform.select({ web: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }, default: {} }) },
+  facilityGridCompact: { ...Platform.select({ web: { gridTemplateColumns: '1fr' }, default: {} }) },
+  facilityOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 16,
-    marginBottom: 12,
-  },
-  sectionIcon: { fontSize: 18 },
-  label: { fontSize: 15, fontWeight: '700', marginBottom: 10, marginTop: 10 },
-  buttonGroup: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 },
-  optionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 10,
+    gap: 12,
+    flexGrow: 1,
+    flexBasis: 180,
+    maxWidth: '100%',
     paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 18,
     borderWidth: 1.5,
-    borderRadius: 12,
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-        transitionDuration: '150ms',
-        transitionProperty: 'all',
-      },
-      default: {},
-    }),
+    ...Platform.select({ web: { cursor: 'pointer', transitionDuration: '180ms', transitionProperty: 'transform, box-shadow, border-color, background-color' }, default: {} }),
   },
-  optionSelected: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  textInput: {
-    padding: 13,
+  facilityOptionCompact: { flexBasis: '100%' },
+  optionBadge: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  optionBadgeText: { fontSize: 13, fontWeight: '900' },
+  optionText: { flex: 1, fontSize: 14, lineHeight: 20, fontWeight: '800', ...Platform.select({ web: { wordBreak: 'keep-all' }, default: {} }) },
+  otherField: { marginTop: 18 },
+  field: { width: '100%', marginTop: 0 },
+  label: { marginBottom: 10, textAlign: 'left', fontSize: 14, lineHeight: 18, fontWeight: '800' },
+  webField: {
     borderWidth: 1.5,
-    borderRadius: 12,
-    marginBottom: 8,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    ...Platform.select({ web: { display: 'grid', gap: 6, transitionDuration: '180ms', transitionProperty: 'box-shadow, border-color, transform' }, default: {} }),
+  },
+  nativeField: { borderWidth: 1.5, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 15 },
+  nativeValue: { fontSize: 15, lineHeight: 20, fontWeight: '700' },
+  fieldHint: { marginTop: 4, fontSize: 12, fontWeight: '600' },
+  hoverLift: { ...Platform.select({ web: { transform: [{ translateY: -1 }], boxShadow: '0 10px 24px rgba(37,99,235,0.08)' }, default: {} }) },
+  pressed: { opacity: 0.92 },
+  textInput: { width: '100%', borderWidth: 1.5, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, lineHeight: 20, ...Platform.select({ web: { outlineStyle: 'none' }, default: {} }) },
+  scheduleGrid: { marginTop: 14, gap: 16, ...Platform.select({ web: { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', alignItems: 'start' }, default: { flexDirection: 'row', flexWrap: 'wrap' } }) },
+  scheduleGridCompact: { ...Platform.select({ web: { gridTemplateColumns: '1fr' }, default: { flexDirection: 'column' } }) },
+  scheduleField: { ...Platform.select({ default: { flexBasis: '48%', flexGrow: 1 }, web: {} }) },
+  scheduleFieldFull: { width: '100%', ...Platform.select({ web: { gridColumn: '1 / -1' }, default: {} }) },
+  preview: { marginTop: 16, padding: 14, borderRadius: 16 },
+  previewLabel: { color: '#2563eb', fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.4 },
+  previewValue: { marginTop: 6, fontSize: 15, lineHeight: 20, fontWeight: '800' },
+  inlineError: { marginTop: 12, color: '#dc2626', fontSize: 13, fontWeight: '700' },
+  submit: {
+    width: '100%',
     marginTop: 8,
-    fontSize: 15,
-  },
-  helperContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-    marginTop: 12,
-    marginBottom: 4,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: 'rgba(37,99,235,0.06)',
-  },
-  helperIcon: { fontSize: 14 },
-  helperText: { fontSize: 13, lineHeight: 18 },
-  submitBtn: {
-    padding: 16,
-    borderRadius: 14,
+    paddingVertical: 17,
+    borderRadius: 18,
     alignItems: 'center',
-    marginTop: 20,
     backgroundColor: '#16a34a',
     ...Platform.select({
-      web: {
-        backgroundImage: 'linear-gradient(135deg, #16a34a, #22c55e)',
-        boxShadow: '0 4px 16px rgba(22,163,74,0.35)',
-        cursor: 'pointer',
-        transitionDuration: '200ms',
-        transitionProperty: 'all',
-      },
-      default: {
-        shadowColor: '#16a34a',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.35,
-        shadowRadius: 12,
-        elevation: 5,
-      },
+      web: { backgroundImage: 'linear-gradient(135deg, #16a34a, #22c55e)', boxShadow: '0 14px 24px rgba(22,163,74,0.24)', cursor: 'pointer' },
+      default: { shadowColor: '#16a34a', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.22, shadowRadius: 18, elevation: 5 },
     }),
   },
-  submitBtnDisabled: {
-    opacity: 0.6,
-  },
-  submitText: { color: 'white', fontWeight: '800', fontSize: 16, letterSpacing: 0.3 },
-
-  // ─── Booking List / Grid ──────────────────────────────────────────────────
-  bookingList: {
-    width: '100%',
-    gap: 18,
-    ...Platform.select({
-      web: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-      },
-      default: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-      },
-    }),
-  },
-  bookingListCompact: {
-    ...Platform.select({
-      web: {
-        gridTemplateColumns: '1fr',
-      },
-      default: {},
-    }),
-  },
-
-  // ─── Booking Card ─────────────────────────────────────────────────────────
-  bookingCard: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    borderRadius: 20,
+  disabled: { opacity: 0.6 },
+  submitText: { color: '#ffffff', fontSize: 15, fontWeight: '900', letterSpacing: 0.2 },
+  list: { width: '100%', gap: 18, ...Platform.select({ web: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))' }, default: { flexDirection: 'row', flexWrap: 'wrap' } }) },
+  listCompact: { ...Platform.select({ web: { gridTemplateColumns: '1fr' }, default: {} }) },
+  card: {
+    backgroundColor: 'rgba(255,255,255,0.98)',
+    borderRadius: 22,
     overflow: 'hidden',
-    position: 'relative',
     ...Platform.select({
-      web: {
-        backdropFilter: 'blur(12px)',
-        transitionDuration: '250ms',
-        transitionProperty: 'all',
-        transitionTimingFunction: 'ease',
-        boxShadow: '0 8px 24px rgba(0,0,0,0.07)',
-      },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.07,
-        shadowRadius: 24,
-        elevation: 4,
-        width: '100%',
-        marginBottom: 18,
-      },
+      web: { transitionDuration: '220ms', transitionProperty: 'transform, box-shadow, border-color', boxShadow: '0 14px 28px rgba(15,23,42,0.08)' },
+      default: { width: '100%', marginBottom: 18, shadowColor: '#0f172a', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.08, shadowRadius: 18, elevation: 4 },
     }),
   },
-  bookingCardDark: {
-    backgroundColor: 'rgba(30,41,59,0.95)',
-  },
-  bookingCardHovered: {
-    shadowOpacity: 0.12,
-    shadowRadius: 32,
-    elevation: 8,
-    transform: [{ translateY: -4 }],
-    ...Platform.select({
-      web: {
-        boxShadow: '0 16px 40px rgba(0,0,0,0.12)',
-      },
-      default: {},
-    }),
-  },
-  cardAccentBar: {
-    height: 4,
-    width: '100%',
-  },
-  cardInner: {
+  cardDark: { backgroundColor: 'rgba(15,23,42,0.96)' },
+  cardHover: { ...Platform.select({ web: { transform: [{ translateY: -3 }], boxShadow: '0 18px 36px rgba(15,23,42,0.12)' }, default: { elevation: 6 } }) },
+  cardToday: { borderWidth: 1.5, borderColor: 'rgba(37,99,235,0.26)' },
+  cardUpcoming: { borderWidth: 1.5, borderColor: 'rgba(14,165,233,0.2)' },
+  cardBar: { width: '100%', height: 4 },
+  cardBody: { padding: 18, gap: 12 },
+  cardHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
+  cardHeadCompact: { alignItems: 'flex-start' },
+  cardHeadLeft: { flex: 1, minWidth: 0 },
+  cardTitle: { fontSize: 18, lineHeight: 24, fontWeight: '900', letterSpacing: -0.2, ...Platform.select({ web: { wordBreak: 'keep-all' }, default: {} }) },
+  status: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, alignSelf: 'flex-start' },
+  status_pending: { backgroundColor: '#d97706', ...Platform.select({ web: { backgroundImage: 'linear-gradient(135deg, #f59e0b, #d97706)' }, default: {} }) },
+  status_approved: { backgroundColor: '#16a34a', ...Platform.select({ web: { backgroundImage: 'linear-gradient(135deg, #22c55e, #16a34a)' }, default: {} }) },
+  status_rejected: { backgroundColor: '#dc2626', ...Platform.select({ web: { backgroundImage: 'linear-gradient(135deg, #ef4444, #dc2626)' }, default: {} }) },
+  statusText: { color: '#ffffff', fontSize: 11, fontWeight: '900' },
+  cardMetaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'nowrap', gap: 10, minWidth: 0 },
+  cardMetaRowCompact: { flexDirection: 'column', alignItems: 'flex-start', gap: 6 },
+  cardMetaText: { flexShrink: 1, fontSize: 14, lineHeight: 20, fontWeight: '700', ...Platform.select({ web: { wordBreak: 'keep-all' }, default: {} }) },
+  cardMetaDivider: { fontSize: 13, fontWeight: '700' },
+  cardAuxText: { fontSize: 13, lineHeight: 18, fontWeight: '600' },
+  reasonBox: { marginTop: 14, padding: 12, borderRadius: 14, backgroundColor: '#fff7ed', borderLeftWidth: 4, borderLeftColor: '#f59e0b' },
+  reasonText: { color: '#92400e', fontSize: 13, lineHeight: 18, fontWeight: '700' },
+  calendar: { gap: 18 },
+  dayGroup: {
+    borderWidth: 1.5,
+    borderRadius: 24,
     padding: 18,
-  },
-
-  // ─── Card Header ──────────────────────────────────────────────────────────
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 10,
-  },
-  facilityIconBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  facilityIcon: { fontSize: 20 },
-  cardTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    flex: 1,
-    letterSpacing: -0.2,
-  },
-
-  // ─── Status Badges ────────────────────────────────────────────────────────
-  status: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  statusApproved: {
-    backgroundColor: '#16a34a',
     ...Platform.select({
-      web: {
-        backgroundImage: 'linear-gradient(135deg, #22c55e, #16a34a)',
-        boxShadow: '0 2px 8px rgba(22,163,74,0.3)',
-      },
-      default: {},
+      web: { boxShadow: '0 16px 34px rgba(15,23,42,0.08)' },
+      default: { shadowColor: '#0f172a', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.08, shadowRadius: 18, elevation: 4 },
     }),
   },
-  statusRejected: {
-    backgroundColor: '#dc2626',
-    ...Platform.select({
-      web: {
-        backgroundImage: 'linear-gradient(135deg, #ef4444, #dc2626)',
-        boxShadow: '0 2px 8px rgba(220,38,38,0.3)',
-      },
-      default: {},
-    }),
-  },
-  statusPending: {
-    backgroundColor: '#d97706',
-    ...Platform.select({
-      web: {
-        backgroundImage: 'linear-gradient(135deg, #f59e0b, #d97706)',
-        boxShadow: '0 2px 8px rgba(217,119,6,0.3)',
-      },
-      default: {},
-    }),
-  },
-  statusText: {
-    color: '#ffffff',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-  },
-
-  // ─── Card Content ─────────────────────────────────────────────────────────
-  bookingInfo: {
-    marginTop: 10,
-  },
-  userInfo: {
-    fontSize: 13,
-    lineHeight: 20,
-    fontWeight: '500',
-  },
-  metaGrid: {
-    marginTop: 12,
-    gap: 8,
-    ...Platform.select({
-      web: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(2, 1fr)',
-      },
-      default: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-      },
-    }),
-  },
-  metaGridCompact: {
-    ...Platform.select({
-      web: {
-        gridTemplateColumns: '1fr',
-      },
-      default: {},
-    }),
-  },
-  metaItem: {
-    width: '48%',
-    marginBottom: 4,
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: 'rgba(100,116,139,0.06)',
-  },
-  metaItemCompact: {
-    width: '100%',
-  },
-  metaLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    marginBottom: 2,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  metaValue: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
-  // ─── Reason Box ───────────────────────────────────────────────────────────
-  reasonBox: {
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: '#fff7ed',
-    borderLeftWidth: 4,
-    borderLeftColor: '#f59e0b',
-  },
-  reasonText: {
-    color: '#92400e',
-    fontSize: 13,
-    lineHeight: 19,
-    fontWeight: '600',
-  },
-
-  // ─── Empty State ──────────────────────────────────────────────────────────
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 48,
-    paddingHorizontal: 24,
-    borderRadius: 20,
-    width: '100%',
-    ...Platform.select({
-      web: {
-        gridColumn: '1 / -1',
-      },
-      default: {},
-    }),
-  },
-  emptyEmoji: {
-    fontSize: 48,
-    marginBottom: 12,
-  },
-  emptyText: {
-    textAlign: 'center',
-    fontSize: 15,
-    fontWeight: '600',
-    lineHeight: 22,
-  },
+  dayHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  dayHeadCompact: { flexDirection: 'column', alignItems: 'flex-start' },
+  dayHeadLeft: { flex: 1 },
+  dayTitle: { fontSize: 18, lineHeight: 24, fontWeight: '900' },
+  dayTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
+  dayTag: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
+  dayTagToday: { backgroundColor: '#dbeafe' },
+  dayTagUpcoming: { backgroundColor: '#e0f2fe' },
+  dayTagText: { color: '#1d4ed8', fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.5 },
+  dayCount: { fontSize: 13, fontWeight: '800' },
+  divider: { height: 1, opacity: 0.85, marginVertical: 16 },
+  empty: { width: '100%', borderRadius: 22, paddingHorizontal: 24, paddingVertical: 48, alignItems: 'center', justifyContent: 'center', ...Platform.select({ web: { gridColumn: '1 / -1' }, default: {} }) },
+  emptyText: { textAlign: 'center', fontSize: 15, lineHeight: 22, fontWeight: '600' },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(2,6,23,0.42)', justifyContent: 'center', padding: 20 },
+  modalCard: { borderWidth: 1, borderRadius: 24, padding: 18 },
+  modalHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 10 },
+  modalTitle: { flex: 1, fontSize: 17, fontWeight: '800' },
+  modalActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  modalBtn: { paddingHorizontal: 10, paddingVertical: 8 },
+  modalBtnText: { fontSize: 14, fontWeight: '700' },
+  modalBtnPrimary: { color: '#2563eb', fontSize: 14, fontWeight: '800' },
 });

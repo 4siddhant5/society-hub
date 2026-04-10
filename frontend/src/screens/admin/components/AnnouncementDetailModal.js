@@ -11,7 +11,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { FiEdit, FiFileText, FiTrash2, FiX } from 'react-icons/fi';
+import { FiEdit, FiFileText, FiTrash2, FiX } from '../../../utils/iconCompat';
 import { useTheme } from '../../../context/ThemeContext';
 
 const CLOSE_DURATION = 180;

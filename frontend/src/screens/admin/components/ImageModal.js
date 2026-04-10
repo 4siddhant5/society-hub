@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { FiX } from 'react-icons/fi';
+import { FiX } from '../../../utils/iconCompat';
 
 const screen = Dimensions.get('window');
 

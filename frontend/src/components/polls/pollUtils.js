@@ -46,7 +46,18 @@ export const getPollStatus = (poll, now = Date.now()) => {
   return 'active';
 };
 
+export const getPollDisplayStatus = (poll, now = Date.now()) =>
+  getPollStatus(poll, now) === 'closed' ? 'closed' : 'active';
+
 export const getPollVotes = (poll) => poll?.votes || {};
+
+export const getPollUserVote = (poll, userId) => {
+  if (!userId) {
+    return null;
+  }
+
+  return getPollVotes(poll)?.[userId] || null;
+};
 
 export const getPollTotalVotes = (poll) => Object.keys(getPollVotes(poll)).length;
 

@@ -10,66 +10,71 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { PieChart } from 'react-native-chart-kit';
-import { FiClock, FiLock, FiPieChart, FiX } from 'react-icons/fi';
-import AppButton from '../ui/AppButton';
+import { FiCalendar, FiCheckCircle, FiClock, FiUsers, FiX } from '../../utils/iconCompat';
+import PollOptionMeter from './PollOptionMeter';
 import colors from '../../design/colors';
 import spacing from '../../design/spacing';
 import {
   formatPollDate,
   formatPollDateTime,
-  getDeadlineLabel,
-  getPollStatus,
+  getPollDisplayStatus,
   getPollTotalVotes,
+  getPollUserVote,
+  getTimestampMs,
   getVotePercentage,
   getVotesForOption,
 } from './pollUtils';
 
 const CLOSE_DURATION = 180;
 const SHOULD_USE_NATIVE_DRIVER = Platform.OS !== 'web';
-
-const CHART_COLORS = ['#2563eb', '#0f766e', '#f59e0b', '#7c3aed', '#ef4444', '#0891b2'];
+const OPTION_COLORS = ['#2563eb', '#0f766e', '#f59e0b', '#7c3aed', '#ef4444', '#0891b2'];
 
 const STATUS_STYLES = {
   active: {
     label: 'Active',
     backgroundColor: '#dcfce7',
     color: '#166534',
+    borderColor: '#86efac',
   },
   closed: {
     label: 'Closed',
     backgroundColor: '#e2e8f0',
     color: '#475569',
-  },
-  scheduled: {
-    label: 'Scheduled',
-    backgroundColor: '#dbeafe',
-    color: '#1d4ed8',
+    borderColor: '#cbd5e1',
   },
 };
 
-const ProgressBar = memo(({ percentage, fillColor }) => {
-  const progress = useRef(new Animated.Value(0)).current;
+const formatCountdown = (deadline, now) => {
+  const deadlineMs = getTimestampMs(deadline);
+  if (deadlineMs === null) {
+    return null;
+  }
 
-  useEffect(() => {
-    Animated.timing(progress, {
-      toValue: percentage,
-      duration: 450,
-      useNativeDriver: false,
-    }).start();
-  }, [percentage, progress]);
+  const diff = deadlineMs - now;
+  if (diff <= 0) {
+    return 'Closed';
+  }
 
-  const width = progress.interpolate({
-    inputRange: [0, 100],
-    outputRange: ['0%', '100%'],
-  });
+  const totalMinutes = Math.floor(diff / (60 * 1000));
+  const totalHours = Math.floor(diff / (60 * 60 * 1000));
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  const minutes = totalMinutes % 60;
 
-  return (
-    <View style={styles.progressTrack}>
-      <Animated.View style={[styles.progressFill, { width, backgroundColor: fillColor }]} />
-    </View>
-  );
-});
+  if (days > 0) {
+    return `Ends in ${days}d ${hours}h`;
+  }
+
+  if (totalHours > 0) {
+    return `Ends in ${totalHours}h ${minutes}m`;
+  }
+
+  if (totalMinutes > 0) {
+    return `Ends in ${totalMinutes}m`;
+  }
+
+  return 'Ends in under 1m';
+};
 
 const PollDetailModal = ({
   visible,
@@ -78,23 +83,38 @@ const PollDetailModal = ({
   onClose,
   onVote,
   userId,
-  onClosePoll,
   showVoteActions = false,
-  showAdminActions = false,
 }) => {
   const { width } = useWindowDimensions();
   const isDesktop = width > 768;
   const [rendered, setRendered] = useState(visible);
   const [activePoll, setActivePoll] = useState(poll);
+  const [liveNow, setLiveNow] = useState(now);
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const cardScale = useRef(new Animated.Value(isDesktop ? 0.96 : 1)).current;
-  const cardTranslateY = useRef(new Animated.Value(isDesktop ? 12 : 40)).current;
+  const cardTranslateY = useRef(new Animated.Value(isDesktop ? 18 : 44)).current;
 
   useEffect(() => {
     if (poll) {
       setActivePoll(poll);
     }
   }, [poll]);
+
+  useEffect(() => {
+    setLiveNow(now);
+  }, [now]);
+
+  useEffect(() => {
+    if (!visible || !poll?.deadline) {
+      return undefined;
+    }
+
+    const interval = setInterval(() => {
+      setLiveNow(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [poll?.deadline, visible]);
 
   useEffect(() => {
     if (visible) {
@@ -131,7 +151,7 @@ const PollDetailModal = ({
         useNativeDriver: SHOULD_USE_NATIVE_DRIVER,
       }),
       Animated.timing(cardTranslateY, {
-        toValue: isDesktop ? 12 : 40,
+        toValue: isDesktop ? 18 : 44,
         duration: CLOSE_DURATION,
         useNativeDriver: SHOULD_USE_NATIVE_DRIVER,
       }),
@@ -150,7 +170,7 @@ const PollDetailModal = ({
 
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
-        onClose();
+        onClose?.();
       }
     };
 
@@ -175,13 +195,24 @@ const PollDetailModal = ({
     };
   }, [visible]);
 
-  const status = useMemo(() => getPollStatus(activePoll, now), [activePoll, now]);
+  const status = useMemo(() => getPollDisplayStatus(activePoll, liveNow), [activePoll, liveNow]);
   const statusStyle = STATUS_STYLES[status] || STATUS_STYLES.active;
   const totalVotes = useMemo(() => getPollTotalVotes(activePoll), [activePoll]);
-  const hasVoted = userId ? Boolean(activePoll?.votes?.[userId]) : false;
-  const myVote = hasVoted ? activePoll?.votes?.[userId] : null;
-  const deadlineLabel = useMemo(() => getDeadlineLabel(activePoll, now), [activePoll, now]);
-  const chartWidth = Math.min(width - (isDesktop ? 200 : 96), 300);
+  const myVote = useMemo(() => getPollUserVote(activePoll, userId), [activePoll, userId]);
+  const hasVoted = Boolean(myVote);
+  const countdownLabel = useMemo(() => formatCountdown(activePoll?.deadline, liveNow), [activePoll?.deadline, liveNow]);
+
+  const helperText = useMemo(() => {
+    if (status === 'closed') {
+      return 'Voting has ended. Final results are available below.';
+    }
+
+    if (showVoteActions && hasVoted) {
+      return 'Your response is locked in and reflected instantly below.';
+    }
+
+    return 'Select one option to vote. Results update in real time.';
+  }, [hasVoted, showVoteActions, status]);
 
   const optionData = useMemo(
     () =>
@@ -190,44 +221,9 @@ const PollDetailModal = ({
         votes: getVotesForOption(activePoll, option),
         percentage: getVotePercentage(activePoll, option),
         isMyVote: myVote === option,
-        color: CHART_COLORS[index % CHART_COLORS.length],
+        color: OPTION_COLORS[index % OPTION_COLORS.length],
       })),
     [activePoll, myVote]
-  );
-
-  const pieData = useMemo(() => {
-    const hasAnyVotes = optionData.some((item) => item.votes > 0);
-
-    if (!hasAnyVotes) {
-      return [
-        {
-          name: 'No votes yet',
-          population: 1,
-          color: '#cbd5e1',
-          legendFontColor: '#475569',
-          legendFontSize: 13,
-        },
-      ];
-    }
-
-    return optionData.map((item) => ({
-      name: item.option,
-      population: item.votes,
-      color: item.color,
-      legendFontColor: '#475569',
-      legendFontSize: 13,
-    }));
-  }, [optionData]);
-
-  const chartConfig = useMemo(
-    () => ({
-      backgroundGradientFrom: '#ffffff',
-      backgroundGradientTo: '#ffffff',
-      color: (opacity = 1) => `rgba(15, 23, 42, ${opacity})`,
-      labelColor: (opacity = 1) => `rgba(71, 85, 105, ${opacity})`,
-      decimalPlaces: 0,
-    }),
-    []
   );
 
   if (!rendered || !activePoll) {
@@ -238,39 +234,70 @@ const PollDetailModal = ({
     <Modal transparent visible={rendered} animationType="none" onRequestClose={onClose}>
       <Animated.View style={[styles.overlay, { opacity: overlayOpacity }]}>
         <Pressable
-          style={styles.modalContainer}
+          style={[styles.backdropPressable, isDesktop ? styles.desktopBackdrop : styles.mobileBackdrop]}
           onPress={onClose}
         >
           <Animated.View
             style={[
-              styles.modalContent,
-              !isDesktop && styles.modalContentMobile,
+              styles.modalShell,
+              isDesktop ? styles.modalShellDesktop : styles.modalShellMobile,
               {
                 transform: [{ translateY: cardTranslateY }, { scale: cardScale }],
               },
             ]}
           >
-            <Pressable style={styles.modalCard} onPress={(event) => event.stopPropagation?.()}>
+            <Pressable
+              style={[styles.modalCard, isDesktop ? styles.modalCardDesktop : styles.modalCardMobile]}
+              onPress={(event) => event.stopPropagation?.()}
+            >
               <View style={styles.header}>
-                <View style={styles.headerText}>
-                  <Text style={styles.title}>{activePoll?.question}</Text>
-                  <View style={styles.metaRow}>
-                    <View style={[styles.statusBadge, { backgroundColor: statusStyle.backgroundColor }]}>
-                      {status === 'closed' ? <FiLock size={12} color={statusStyle.color} /> : null}
-                      <Text style={[styles.statusText, { color: statusStyle.color }]}>{statusStyle.label}</Text>
-                    </View>
-                    {deadlineLabel ? (
-                      <View style={styles.deadlinePill}>
-                        <FiClock size={12} color="#0f766e" />
-                        <Text style={styles.deadlineText}>{deadlineLabel}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                </View>
+                {!isDesktop ? <View style={styles.modalHandle} /> : null}
 
-                <Pressable style={styles.closeIconButton} onPress={onClose}>
-                  <FiX size={18} color="#64748b" />
-                </Pressable>
+                <View style={styles.headerRow}>
+                  <View style={styles.headerTextWrap}>
+                    <View style={styles.metaRow}>
+                      <View
+                        style={[
+                          styles.statusBadge,
+                          {
+                            backgroundColor: statusStyle.backgroundColor,
+                            borderColor: statusStyle.borderColor,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.statusText, { color: statusStyle.color }]}>
+                          {statusStyle.label}
+                        </Text>
+                      </View>
+
+                      {countdownLabel ? (
+                        <View
+                          style={[
+                            styles.countdownPill,
+                            status === 'closed' && styles.countdownPillClosed,
+                          ]}
+                        >
+                          <FiClock size={14} color={status === 'closed' ? '#64748b' : '#0f766e'} />
+                          <Text
+                            style={[
+                              styles.countdownText,
+                              status === 'closed' && styles.countdownTextClosed,
+                            ]}
+                          >
+                            {countdownLabel}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+
+                    <Text style={styles.title}>{activePoll?.question || 'Untitled poll'}</Text>
+                    <Text style={styles.helperText}>{helperText}</Text>
+                  </View>
+
+                  <Pressable style={styles.closeIconButton} onPress={onClose}>
+                    <FiX size={18} color="#64748b" />
+                  </Pressable>
+                </View>
               </View>
 
               <ScrollView
@@ -278,99 +305,55 @@ const PollDetailModal = ({
                 contentContainerStyle={styles.modalBodyContent}
                 showsVerticalScrollIndicator={false}
               >
-                <View style={styles.contentSection}>
-                  <View style={styles.chartCard}>
-                    <View style={styles.chartHeader}>
-                      <FiPieChart size={18} color="#2563eb" />
-                      <Text style={styles.sectionTitle}>Vote Distribution</Text>
-                    </View>
-                    <View style={styles.chartContainer}>
-                      <PieChart
-                        data={pieData}
-                        width={chartWidth}
-                        height={220}
-                        chartConfig={chartConfig}
-                        accessor="population"
-                        backgroundColor="transparent"
-                        paddingLeft="18"
-                        absolute={totalVotes > 0}
-                      />
+                <View style={styles.statStrip}>
+                  <View style={styles.statPill}>
+                    <FiCalendar size={14} color="#7c3aed" />
+                    <View style={styles.statTextWrap}>
+                      <Text style={styles.statLabel}>Created</Text>
+                      <Text style={styles.statValue}>{formatPollDate(activePoll?.createdAt)}</Text>
                     </View>
                   </View>
-
-                  <View style={styles.insightCard}>
-                    <Text style={styles.sectionTitle}>Poll Snapshot</Text>
-                    <View style={styles.statGrid}>
-                      <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>Total Votes</Text>
-                        <Text style={styles.statValue}>{totalVotes}</Text>
-                      </View>
-                      <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>Created</Text>
-                        <Text style={styles.statValue}>{formatPollDate(activePoll?.createdAt)}</Text>
-                      </View>
-                      <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>Deadline</Text>
-                        <Text style={styles.statValue}>
-                          {activePoll?.deadline ? formatPollDateTime(activePoll.deadline) : 'No deadline'}
-                        </Text>
-                      </View>
+                  <View style={styles.statPill}>
+                    <FiUsers size={14} color="#2563eb" />
+                    <View style={styles.statTextWrap}>
+                      <Text style={styles.statLabel}>Total votes</Text>
+                      <Text style={styles.statValue}>{totalVotes}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.statPill}>
+                    <FiClock size={14} color="#0f766e" />
+                    <View style={styles.statTextWrap}>
+                      <Text style={styles.statLabel}>Deadline</Text>
+                      <Text style={styles.statValue}>
+                        {activePoll?.deadline ? formatPollDateTime(activePoll.deadline) : 'No deadline'}
+                      </Text>
                     </View>
                   </View>
                 </View>
+
+                {hasVoted ? (
+                  <View style={styles.voteNotice}>
+                    <FiCheckCircle size={15} color="#0f766e" />
+                    <Text style={styles.voteNoticeText}>You have already voted. Re-voting is disabled.</Text>
+                  </View>
+                ) : null}
 
                 <View style={styles.optionList}>
                   {optionData.map((item, index) => (
-                    <View
+                    <PollOptionMeter
                       key={`${item.option}-${index}`}
-                      style={[styles.optionRow, item.isMyVote && styles.optionRowSelected]}
-                    >
-                      <View style={styles.optionTopRow}>
-                        <View style={styles.optionInfo}>
-                          <View style={[styles.optionDot, { backgroundColor: item.color }]} />
-                          <Text style={styles.optionTitle}>{item.option}</Text>
-                        </View>
-                        <Text style={styles.optionMetric}>
-                          {item.votes} vote{item.votes === 1 ? '' : 's'} | {item.percentage}%
-                        </Text>
-                      </View>
-
-                      <ProgressBar
-                        percentage={item.percentage}
-                        fillColor={item.isMyVote ? '#0f766e' : item.color}
-                      />
-
-                      {showVoteActions ? (
-                        <AppButton
-                          title={item.isMyVote ? 'Your vote' : 'Vote'}
-                          onPress={(event) => {
-                            event?.stopPropagation?.();
-                            onVote?.(activePoll, item.option);
-                          }}
-                          type={item.isMyVote ? 'success' : 'secondary'}
-                          disabled={hasVoted || status === 'closed'}
-                          style={styles.voteButton}
-                          textStyle={item.isMyVote ? styles.voteButtonActiveText : styles.voteButtonText}
-                        />
-                      ) : null}
-                    </View>
+                      label={item.option}
+                      percentage={item.percentage}
+                      votes={item.votes}
+                      isSelected={item.isMyVote}
+                      canVote={showVoteActions && status === 'active' && !hasVoted}
+                      showVoteButton={showVoteActions && status === 'active'}
+                      accentColor={item.color}
+                      onVote={() => onVote?.(activePoll, item.option)}
+                    />
                   ))}
                 </View>
               </ScrollView>
-
-              {showAdminActions && status !== 'closed' ? (
-                <View style={styles.modalFooter}>
-                  <AppButton
-                    title="Close Poll"
-                    onPress={(event) => {
-                      event?.stopPropagation?.();
-                      onClosePoll?.(activePoll.id);
-                    }}
-                    type="danger"
-                    style={styles.closeButton}
-                  />
-                </View>
-              ) : null}
             </Pressable>
           </Animated.View>
         </Pressable>
@@ -382,160 +365,179 @@ const PollDetailModal = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-  },
-  modalContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-  },
-  modalContent: {
-    backgroundColor: '#ffffff',
-    width: '100%',
-    maxWidth: 650,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#dbeafe',
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
+    backgroundColor: 'rgba(2, 6, 23, 0.66)',
     ...Platform.select({
       web: {
-        boxShadow: '0px 20px 48px rgba(2, 6, 23, 0.18)',
-        maxHeight: '90vh',
-      },
-      default: {
-        shadowColor: '#020617',
-        shadowOpacity: 0.18,
-        shadowRadius: 24,
-        shadowOffset: { width: 0, height: 12 },
-        elevation: 10,
-        maxHeight: '90%',
+        backdropFilter: 'blur(10px)',
       },
     }),
   },
-  modalContentMobile: {
+  backdropPressable: {
+    flex: 1,
+    width: '100%',
+  },
+  desktopBackdrop: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  mobileBackdrop: {
+    justifyContent: 'flex-end',
+    paddingTop: 40,
+  },
+  modalShell: {
+    width: '100%',
+  },
+  modalShellDesktop: {
+    maxWidth: 700,
+  },
+  modalShellMobile: {
     maxWidth: '100%',
-    borderRadius: 12,
   },
   modalCard: {
-    flex: 1,
+    flexDirection: 'column',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#ffffff',
+    ...Platform.select({
+      web: {
+        boxShadow: '0px 24px 72px rgba(2, 6, 23, 0.22)',
+        maxHeight: '86vh',
+      },
+      default: {
+        shadowColor: '#020617',
+        shadowOpacity: 0.22,
+        shadowRadius: 24,
+        shadowOffset: { width: 0, height: 12 },
+        elevation: 12,
+        maxHeight: '92%',
+      },
+    }),
+  },
+  modalCardDesktop: {
+    borderRadius: 28,
+  },
+  modalCardMobile: {
+    width: '100%',
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    padding: 16,
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
     backgroundColor: '#ffffff',
   },
-  headerText: {
-    flex: 1,
+  modalHandle: {
+    alignSelf: 'center',
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(148,163,184,0.45)',
+    marginBottom: 14,
   },
-  title: {
-    fontSize: 24,
-    lineHeight: 32,
-    fontWeight: '800',
-    color: colors.textPrimary,
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  headerTextWrap: {
+    flex: 1,
+    gap: 10,
   },
   metaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.sm,
+    gap: 8,
   },
   statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
     borderRadius: 999,
+    borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
   statusText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
   },
-  deadlinePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: '#ccfbf1',
-  },
-  deadlineText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#115e59',
-  },
-  closeIconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  modalBody: {
-    flex: 1,
-    width: '100%',
-  },
-  modalBodyContent: {
-    padding: 16,
-    flexDirection: 'column',
-    gap: 12,
-  },
-  contentSection: {
-    flexDirection: 'column',
-    gap: 12,
-  },
-  chartCard: {
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#f8fbff',
-    padding: 16,
-  },
-  chartHeader: {
+  countdownPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+    backgroundColor: '#ecfeff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  chartContainer: {
-    width: '100%',
-    maxWidth: 300,
-    alignSelf: 'center',
+  countdownPillClosed: {
+    borderColor: '#cbd5e1',
+    backgroundColor: '#f1f5f9',
   },
-  insightCard: {
-    borderRadius: 22,
+  countdownText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0f766e',
+  },
+  countdownTextClosed: {
+    color: '#64748b',
+  },
+  title: {
+    fontSize: 24,
+    lineHeight: 33,
+    fontWeight: '900',
+    letterSpacing: -0.6,
+    color: colors.textPrimary,
+  },
+  helperText: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: colors.textSecondary,
+  },
+  closeIconButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    backgroundColor: '#ffffff',
-    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8fafc',
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0f172a',
+  modalBody: {
+    flex: 1,
+    minHeight: 0,
   },
-  statGrid: {
-    marginTop: 14,
+  modalBodyContent: {
+    padding: 18,
+    gap: 18,
+  },
+  statStrip: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
   },
-  statItem: {
+  statPill: {
+    flex: 1,
+    minWidth: 160,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
     borderRadius: 18,
     backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     paddingHorizontal: 14,
     paddingVertical: 12,
+  },
+  statTextWrap: {
+    flex: 1,
   },
   statLabel: {
     fontSize: 11,
@@ -551,81 +553,26 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#334155',
   },
+  voteNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    backgroundColor: '#f0fdfa',
+    borderWidth: 1,
+    borderColor: '#99f6e4',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  voteNoticeText: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '700',
+    color: '#0f766e',
+  },
   optionList: {
     gap: 12,
-  },
-  optionRow: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#f8fafc',
-    padding: 14,
-  },
-  optionRowSelected: {
-    borderColor: '#99f6e4',
-    backgroundColor: '#f0fdfa',
-  },
-  progressTrack: {
-    width: '100%',
-    height: 10,
-    marginTop: 12,
-    borderRadius: 999,
-    overflow: 'hidden',
-    backgroundColor: '#dbeafe',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 999,
-  },
-  optionTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  optionInfo: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  optionDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 999,
-  },
-  optionTitle: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0f172a',
-  },
-  optionMetric: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#475569',
-    flexShrink: 0,
-  },
-  voteButton: {
-    marginTop: 12,
-    minHeight: 42,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  voteButtonText: {
-    color: '#0f172a',
-  },
-  voteButtonActiveText: {
-    color: '#ffffff',
-  },
-  modalFooter: {
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#eeeeee',
-    backgroundColor: '#ffffff',
-  },
-  closeButton: {
-    minHeight: 46,
   },
 });
 

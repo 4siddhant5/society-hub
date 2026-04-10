@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StyleSheet, Alert, AppState, View, Text, TouchableOpacity } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../config/firebase';
@@ -21,24 +22,78 @@ import ProfileScreen from './ProfileScreen';
 import MembersScreen from './MembersScreen';
 import GroupInfoScreen from './GroupInfoScreen';
 import EditProfileScreen from './EditProfileScreen';
+import SettingsScreen from './SettingsScreen';
 import IssueDetailScreen from './IssueDetailScreen';
 import NotificationScreen from './NotificationScreen';
 import BookingScreen from './BookingScreen';
-import BookingCalendarScreen from './BookingCalendarScreen';
 import { isPollExpired } from '../components/polls/pollUtils';
+
+const SCREEN_TITLES = {
+  Home: 'Home',
+  MyIssues: '',
+  Announcements: 'Announcements',
+  Polls: 'Polls',
+  SOS: 'SOS',
+  SOSAlerts: 'SOS Alerts',
+  SOSAlertsScreen: 'SOS Alerts',
+  CreateIssue: 'Create Issue',
+  CreateIssueScreen: 'Create Issue',
+  CommunityChat: 'Community Chat',
+  ChatScreen: 'Community Chat',
+  Profile: 'Profile',
+  ProfileScreen: 'Profile',
+  Members: 'Members',
+  MembersScreen: 'Members',
+  GroupInfo: 'Group Info',
+  GroupInfoScreen: 'Group Info',
+  IssueDetail: 'Issue Detail',
+  EditProfile: 'Edit Profile',
+  EditProfileScreen: 'Edit Profile',
+  Settings: 'Settings',
+  SettingsScreen: 'Settings',
+  NotificationScreen: 'Notifications',
+  CreateBooking: 'Bookings',
+  CreateBookingScreen: 'Bookings',
+  Booking: 'Bookings',
+  BookingScreen: 'Bookings',
+  MyBookings: 'My Bookings',
+  BookingsList: 'Bookings',
+  BookingsListScreen: 'Bookings',
+  BookingCalendar: 'Bookings',
+  BookingCalendarScreen: 'Bookings',
+};
 
 export default function ResidentDashboard() {
   const { user, userData } = useAuth();
   const [polls, setPolls] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
+  const [broadcasts, setBroadcasts] = useState([]);
   const [issues, setIssues] = useState([]);
-  const [latestBroadcast, setLatestBroadcast] = useState(null);
+  const [dismissedBroadcastId, setDismissedBroadcastId] = useState(null);
   const [activeSOS, setActiveSOS] = useState(null);
   const [sosBannerVisible, setSOSBannerVisible] = useState(true);
 
   const [navStack, setNavStack] = useState([{ screen: 'Home' }]);
   const navigate = (screen, params = {}) => setNavStack((prev) => [...prev, { screen, params }]);
   const goBack = () => setNavStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
+
+  useEffect(() => {
+    let mounted = true;
+
+    AsyncStorage.getItem('broadcastDismissedId')
+      .then((storedId) => {
+        if (mounted) {
+          setDismissedBroadcastId(storedId || null);
+        }
+      })
+      .catch((error) => {
+        console.warn('[ResidentDashboard] Broadcast dismissal load failed:', error);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!userData?.societyId) return undefined;
@@ -75,12 +130,7 @@ export default function ResidentDashboard() {
       };
 
       list.sort((a, b) => toMs(b.timestamp) - toMs(a.timestamp));
-      const latest = list[0];
-      if (latest && Date.now() - toMs(latest.timestamp) < 24 * 60 * 60 * 1000) {
-        setLatestBroadcast(latest);
-      } else {
-        setLatestBroadcast(null);
-      }
+      setBroadcasts(list);
     });
 
     return () => {
@@ -149,12 +199,20 @@ export default function ResidentDashboard() {
   }, [activeSOS?.id]);
 
   const handleVote = async (poll, selectedOption) => {
-    if (poll.isClosed || isPollExpired(poll)) return Alert.alert('Closed', 'This poll is closed.');
-    if (poll.votes && poll.votes[user.uid]) return Alert.alert('Voted', 'Already voted');
+    if (poll.isClosed || isPollExpired(poll)) {
+      Alert.alert('Closed', 'This poll is closed.');
+      return false;
+    }
+    if (poll.votes && poll.votes[user.uid]) {
+      Alert.alert('Voted', 'Already voted');
+      return false;
+    }
     try {
       await updateDoc(doc(db, 'polls', poll.id), { [`votes.${user.uid}`]: selectedOption });
+      return true;
     } catch (error) {
       Alert.alert('Error', 'Failed to vote.');
+      throw error;
     }
   };
 
@@ -162,7 +220,39 @@ export default function ResidentDashboard() {
     if (url) window.open(url, '_blank');
   };
 
+  const latestBroadcast = useMemo(() => {
+    const latest = broadcasts[0];
+
+    if (latest && Date.now() - (typeof latest?.timestamp?.toMillis === 'function'
+      ? latest.timestamp.toMillis()
+      : typeof latest?.timestamp?.toDate === 'function'
+        ? latest.timestamp.toDate().getTime()
+        : Number(latest?.timestamp) || 0) < 24 * 60 * 60 * 1000) {
+      return latest;
+    }
+
+    return null;
+  }, [broadcasts]);
+
+  const visibleBroadcast =
+    latestBroadcast && latestBroadcast.id !== dismissedBroadcastId ? latestBroadcast : null;
+
+  const handleDismissBroadcast = async () => {
+    if (!latestBroadcast?.id) return;
+
+    setDismissedBroadcastId(latestBroadcast.id);
+
+    try {
+      await AsyncStorage.setItem('broadcastDismissedId', latestBroadcast.id);
+    } catch (error) {
+      console.warn('[ResidentDashboard] Broadcast dismissal save failed:', error);
+    }
+  };
+
   const current = navStack[navStack.length - 1];
+  const layoutTitle = current.screen === 'Home'
+    ? `Hello, ${userData?.name || 'Resident'}`
+    : SCREEN_TITLES[current.screen] ?? current.screen;
 
   const renderContent = () => {
     switch (current.screen) {
@@ -172,21 +262,27 @@ export default function ResidentDashboard() {
             userData={userData}
             issues={issues}
             announcements={announcements}
-            latestBroadcast={latestBroadcast}
+            latestBroadcast={visibleBroadcast}
+            onDismissBroadcast={handleDismissBroadcast}
+            polls={polls}
             onNavigate={navigate}
           />
         );
       case 'MyIssues':
         return (
           <MyIssuesScreen
-            issues={issues.filter(
-              (item) => item.createdBy === user.uid || item.userId === user.uid || item.residentId === user.uid || item.reportedBy === user.uid
-            )}
+            issues={issues}
             onNavigate={navigate}
           />
         );
       case 'Announcements':
-        return <AnnouncementsScreen announcements={announcements} openPDF={openPDF} />;
+        return (
+          <AnnouncementsScreen
+            announcements={announcements}
+            broadcasts={broadcasts}
+            openPDF={openPDF}
+          />
+        );
       case 'Polls':
         return <PollsScreen polls={polls} user={user} handleVote={handleVote} />;
       case 'SOS':
@@ -214,29 +310,34 @@ export default function ResidentDashboard() {
       case 'EditProfile':
       case 'EditProfileScreen':
         return <EditProfileScreen navigation={{ navigate, goBack }} userId={current.params?.userId} />;
+      case 'Settings':
+      case 'SettingsScreen':
+        return <SettingsScreen navigation={{ navigate, goBack }} />;
       case 'NotificationScreen':
         return <NotificationScreen goBack={goBack} />;
       case 'CreateBooking':
       case 'CreateBookingScreen':
-        return <BookingScreen goBack={goBack} initialTab="create" />;
+        return <BookingScreen goBack={goBack} initialTab="book" />;
       case 'Booking':
       case 'BookingScreen':
-        return <BookingScreen goBack={goBack} initialTab={current.params?.initialTab || 'create'} />;
+        return <BookingScreen goBack={goBack} initialTab={current.params?.initialTab || 'book'} />;
       case 'MyBookings':
         return <BookingScreen goBack={goBack} initialTab="mine" />;
       case 'BookingsList':
       case 'BookingsListScreen':
-        return <BookingScreen goBack={goBack} initialTab="public" />;
+        return <BookingScreen goBack={goBack} initialTab="calendar" />;
       case 'BookingCalendar':
       case 'BookingCalendarScreen':
-        return <BookingCalendarScreen goBack={goBack} />;
+        return <BookingScreen goBack={goBack} initialTab="calendar" />;
       default:
         return (
           <ResidentHomeScreen
             userData={userData}
             issues={issues}
             announcements={announcements}
-            latestBroadcast={latestBroadcast}
+            latestBroadcast={visibleBroadcast}
+            onDismissBroadcast={handleDismissBroadcast}
+            polls={polls}
             onNavigate={navigate}
           />
         );
@@ -247,7 +348,7 @@ export default function ResidentDashboard() {
     <ResidentLayout
       activeScreen={current.screen}
       onNavigate={navigate}
-      title={current.screen === 'Home' ? `Hello, ${userData?.name || 'Resident'}` : current.screen}
+      title={layoutTitle}
     >
       <View style={styles.screenBody}>
         {activeSOS ? (

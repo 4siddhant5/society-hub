@@ -11,7 +11,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore';
-import { FiAlertTriangle, FiBarChart2, FiBell, FiHome, FiUserCheck, FiUsers } from 'react-icons/fi';
+import { FiAlertTriangle, FiBarChart2, FiBell, FiHome, FiUserCheck, FiUsers } from '../utils/iconCompat';
 import { db } from '../config/firebase';
 import { useAuth } from '../context/AuthContext';
 import { logoutAuthUser } from '../services/authService';

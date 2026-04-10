@@ -1,4 +1,5 @@
 import React, { memo, useCallback, useMemo, useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import {
   FlatList,
@@ -12,10 +13,9 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { FiAlertTriangle, FiCalendar, FiFlag, FiImage, FiPlus, FiX } from 'react-icons/fi';
+import { FiAlertTriangle, FiCalendar, FiFlag, FiImage, FiPlus, FiX } from '../../utils/iconCompat';
 import AppCard from '../../components/ui/AppCard';
 import EmptyState from '../../components/ui/EmptyState';
-import PageHeader from '../../components/ui/PageHeader';
 import PrimaryButton from '../../components/ui/PrimaryButton';
 import SearchBar from '../../components/ui/SearchBar';
 import colors from '../../design/colors';
@@ -213,26 +213,39 @@ const ImagePreviewModal = memo(function ImagePreviewModal({ preview, onClose }) 
 });
 
 const MyIssuesScreen = ({ issues, onNavigate }) => {
+  const { user } = useAuth();
   const { isDark } = useTheme();
   const { width } = useWindowDimensions();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
+  const [scope, setScope] = useState('all');
   const [preview, setPreview] = useState(null);
 
   const isMobile = width < 768;
   const isTablet = width >= 768 && width < 1180;
   const numColumns = isTablet ? 2 : width >= 1180 ? 3 : 1;
 
+  const isUserIssue = useCallback(
+    (issue) =>
+      !!user?.uid &&
+      (issue?.userId === user.uid ||
+        issue?.createdBy === user.uid ||
+        issue?.residentId === user.uid ||
+        issue?.reportedBy === user.uid),
+    [user?.uid]
+  );
+
   const filtered = useMemo(
     () =>
       issues?.filter(
         (issue) =>
+          (scope === 'all' || isUserIssue(issue)) &&
           ((issue.title || '').toLowerCase().includes(search.toLowerCase()) ||
             (issue.description || '').toLowerCase().includes(search.toLowerCase()) ||
             (issue.category || '').toLowerCase().includes(search.toLowerCase())) &&
           (filter === 'all' || issue.status === filter)
       ) || [],
-    [filter, issues, search]
+    [filter, isUserIssue, issues, scope, search]
   );
 
   const handleOpenDetail = useCallback(
@@ -253,106 +266,154 @@ const MyIssuesScreen = ({ issues, onNavigate }) => {
   }, [onNavigate]);
 
   const renderIssue = useCallback(
-    ({ item }) => (
-      <View
-        style={[
-          styles.cardColumn,
-          numColumns > 1 && styles.cardColumnMulti,
-          numColumns === 3 && styles.cardColumnWide,
-        ]}
-      >
-        <IssueCard
-          item={item}
-          isDark={isDark}
-          isCompact={isMobile}
-          onOpenDetail={handleOpenDetail}
-          onOpenImage={handleOpenPreview}
-        />
-      </View>
-    ),
+    ({ item, index }) => {
+      const isRowStart = numColumns === 1 || index % numColumns === 0;
+      const isRowEnd = numColumns === 1 || index % numColumns === numColumns - 1;
+
+      return (
+        <View
+          style={[
+            styles.cardColumn,
+            isRowStart && styles.cardColumnStart,
+            isRowEnd && styles.cardColumnEnd,
+            numColumns > 1 && styles.cardColumnMulti,
+            numColumns === 3 && styles.cardColumnWide,
+          ]}
+        >
+          <IssueCard
+            item={item}
+            isDark={isDark}
+            isCompact={isMobile}
+            onOpenDetail={handleOpenDetail}
+            onOpenImage={handleOpenPreview}
+          />
+        </View>
+      );
+    },
     [handleOpenDetail, handleOpenPreview, isDark, isMobile, numColumns]
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: isDark ? '#020617' : colors.background }]}>
+    <View style={[styles.issuesPage, { backgroundColor: isDark ? '#020617' : colors.background }]}>
+      <View
+        style={[
+          styles.issuesHeader,
+          {
+            backgroundColor: isDark ? '#0f172a' : '#ffffff',
+            borderBottomColor: isDark ? 'rgba(148, 163, 184, 0.14)' : '#e2e8f0',
+          },
+          isMobile && styles.issuesHeaderMobile,
+        ]}
+      >
+        <Text style={[styles.issuesTitle, { color: isDark ? '#f8fafc' : '#0f172a' }]}>Issues</Text>
+
+        {!isMobile ? (
+          <PrimaryButton
+            title="Report New Issue"
+            onPress={handleCreateIssue}
+            icon={FiPlus}
+            style={styles.primaryButton}
+          />
+        ) : null}
+      </View>
+
+      <View
+        style={[
+          styles.issuesToolbar,
+          {
+            backgroundColor: isDark ? '#0f172a' : '#ffffff',
+            borderBottomColor: isDark ? 'rgba(148, 163, 184, 0.14)' : '#e2e8f0',
+          },
+          isMobile && styles.issuesToolbarMobile,
+        ]}
+      >
+        <View
+          style={[
+            styles.issuesScopeToggle,
+            {
+              backgroundColor: isDark ? '#020617' : '#f8fafc',
+              borderColor: isDark ? 'rgba(148, 163, 184, 0.14)' : '#dbe4f0',
+            },
+          ]}
+        >
+          {[
+            { key: 'all', label: 'All Issues' },
+            { key: 'mine', label: 'My Issues' },
+          ].map((option) => {
+            const active = scope === option.key;
+
+            return (
+              <TouchableOpacity
+                key={option.key}
+                style={[
+                  styles.scopeButton,
+                  active && styles.scopeButtonActive,
+                  { backgroundColor: active ? '#2563eb' : 'transparent' },
+                ]}
+                onPress={() => setScope(option.key)}
+                activeOpacity={0.9}
+              >
+                <Text style={[styles.scopeButtonText, { color: active ? '#ffffff' : isDark ? '#cbd5e1' : '#475569' }]}>
+                  {option.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <SearchBar
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search by title, description, or category"
+          style={[
+            styles.searchWrap,
+            {
+              backgroundColor: isDark ? '#020617' : '#f8fafc',
+              borderColor: isDark ? 'rgba(148, 163, 184, 0.14)' : '#dbe4f0',
+            },
+          ]}
+          inputStyle={{ color: isDark ? '#f8fafc' : '#0f172a' }}
+        />
+
+        <View style={styles.filterRow}>
+          {['all', 'Pending', 'In Progress', 'Resolved'].map((status) => {
+            const active = filter === status;
+            return (
+              <TouchableOpacity
+                key={status}
+                style={[
+                  styles.filterChip,
+                  {
+                    backgroundColor: active ? '#2563eb' : isDark ? '#020617' : '#ffffff',
+                    borderColor: active ? '#2563eb' : isDark ? 'rgba(148, 163, 184, 0.14)' : '#dbe4f0',
+                  },
+                ]}
+                onPress={() => setFilter(status)}
+                activeOpacity={0.9}
+              >
+                <Text style={[styles.filterChipText, { color: active ? '#ffffff' : isDark ? '#cbd5e1' : '#475569' }]}>
+                  {status}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
       <FlatList
         key={`issues-${numColumns}`}
         data={filtered}
         keyExtractor={(item) => item.id}
         renderItem={renderIssue}
         numColumns={numColumns}
+        style={styles.issuesContent}
         columnWrapperStyle={numColumns > 1 ? styles.columnWrapper : null}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-        ListHeaderComponent={
-          <View style={styles.headerArea}>
-            <AppCard
-              style={[
-                styles.heroCard,
-                {
-                  backgroundColor: isDark ? 'rgba(15, 23, 42, 0.96)' : '#ffffff',
-                  borderColor: isDark ? 'rgba(148, 163, 184, 0.14)' : '#e2e8f0',
-                },
-              ]}
-            >
-              <View style={[styles.heroTopRow, isMobile && styles.heroTopRowStack]}>
-                <PageHeader
-                  eyebrow="Resident Dashboard"
-                  title="My Reported Issues"
-                  subtitle="Track every request with a cleaner timeline, clearer status updates, and quick image review."
-                  contained={false}
-                  style={styles.heroHeaderCard}
-                />
-
-                {!isMobile ? (
-                  <PrimaryButton title="Report New Issue" onPress={handleCreateIssue} icon={FiPlus} style={styles.primaryButton} />
-                ) : null}
-              </View>
-
-              <View style={[styles.controlsRow, isMobile && styles.controlsRowStack]}>
-                <SearchBar
-                  value={search}
-                  onChangeText={setSearch}
-                  placeholder="Search by title, description, or category"
-                  style={[
-                    styles.searchWrap,
-                    {
-                      backgroundColor: isDark ? '#0f172a' : '#f8fafc',
-                      borderColor: isDark ? 'rgba(148, 163, 184, 0.14)' : '#dbe4f0',
-                    },
-                  ]}
-                  inputStyle={{ color: isDark ? '#f8fafc' : '#0f172a' }}
-                />
-
-                <View style={styles.filterRow}>
-                  {['all', 'Pending', 'In Progress', 'Resolved'].map((status) => {
-                    const active = filter === status;
-                    return (
-                      <TouchableOpacity
-                        key={status}
-                        style={[
-                          styles.filterChip,
-                          {
-                            backgroundColor: active ? '#2563eb' : isDark ? '#0f172a' : '#ffffff',
-                            borderColor: active ? '#2563eb' : isDark ? 'rgba(148, 163, 184, 0.14)' : '#dbe4f0',
-                          },
-                        ]}
-                        onPress={() => setFilter(status)}
-                        activeOpacity={0.9}
-                      >
-                        <Text style={[styles.filterChipText, { color: active ? '#ffffff' : isDark ? '#cbd5e1' : '#475569' }]}>
-                          {status}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-            </AppCard>
-          </View>
-        }
+        keyboardShouldPersistTaps="handled"
+        ListFooterComponent={<View style={styles.listFooter} />}
         ListEmptyComponent={
-          <View style={styles.emptyWrap}>
+          <View style={[styles.emptyWrap, isMobile && styles.emptyWrapMobile]}>
             <EmptyState message="No issues reported yet." icon={FiAlertTriangle} />
           </View>
         }
@@ -370,48 +431,104 @@ const MyIssuesScreen = ({ issues, onNavigate }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
+  issuesPage: {
     flex: 1,
+    minHeight: 0,
   },
-  listContent: {
-    paddingHorizontal: spacing.md,
-    paddingTop: 18,
-    paddingBottom: 108,
-  },
-  headerArea: {
-    marginBottom: 20,
-  },
-  heroCard: {
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 0,
-  },
-  heroHeaderCard: {
-    flex: 1,
-    padding: 0,
-    marginBottom: 0,
-  },
-  heroTopRow: {
+  issuesHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 16,
+    gap: 12,
+    paddingHorizontal: spacing.md,
+    paddingTop: 12,
+    paddingBottom: 12,
+    marginBottom: 10,
+    borderBottomWidth: 1,
   },
-  heroTopRowStack: {
-    flexDirection: 'column',
+  issuesHeaderMobile: {
+    paddingHorizontal: spacing.sm,
+    paddingTop: 10,
+    paddingBottom: 10,
+  },
+  issuesTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    lineHeight: 28,
+  },
+  issuesContent: {
+    flex: 1,
+    minHeight: 0,
+    ...Platform.select({
+      web: {
+        height: '100%',
+        scrollBehavior: 'smooth',
+      },
+      default: {},
+    }),
   },
   primaryButton: {
     minWidth: 176,
   },
-  controlsRow: {
-    marginTop: 18,
-    gap: 14,
+  listContent: {
+    paddingTop: 0,
   },
-  controlsRowStack: {
-    gap: 12,
+  listFooter: {
+    height: 20,
+  },
+  issuesToolbar: {
+    paddingHorizontal: spacing.md,
+    paddingTop: 8,
+    paddingBottom: 10,
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+      },
+      default: {
+        shadowColor: '#000000',
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 2,
+      },
+    }),
+  },
+  issuesToolbarMobile: {
+    paddingHorizontal: spacing.sm,
+    paddingTop: 6,
+    paddingBottom: 6,
+  },
+  issuesScopeToggle: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderRadius: 999,
+    padding: 4,
+    marginBottom: 10,
+  },
+  scopeButton: {
+    minHeight: 36,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scopeButtonActive: {
+    shadowColor: '#2563eb',
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  scopeButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   searchWrap: {
     flex: 1,
+    marginBottom: 10,
   },
   filterRow: {
     flexDirection: 'row',
@@ -432,13 +549,20 @@ const styles = StyleSheet.create({
   },
   columnWrapper: {
     gap: 16,
-    marginBottom: 16,
   },
   cardColumn: {
+    paddingHorizontal: spacing.md,
     marginBottom: 16,
+  },
+  cardColumnStart: {
+    paddingLeft: spacing.md,
+  },
+  cardColumnEnd: {
+    paddingRight: spacing.md,
   },
   cardColumnMulti: {
     flex: 1,
+    paddingHorizontal: 0,
   },
   cardColumnWide: {
     maxWidth: '33.333%',
@@ -454,7 +578,6 @@ const styles = StyleSheet.create({
   },
   card: {
     minHeight: 100,
-    height: '100%',
     borderWidth: 1,
     padding: 18,
     marginBottom: 0,
@@ -574,7 +697,11 @@ const styles = StyleSheet.create({
     maxWidth: 180,
   },
   emptyWrap: {
-    marginTop: 8,
+    marginTop: 12,
+    paddingHorizontal: spacing.md,
+  },
+  emptyWrapMobile: {
+    paddingHorizontal: spacing.sm,
   },
   fab: {
     position: 'absolute',

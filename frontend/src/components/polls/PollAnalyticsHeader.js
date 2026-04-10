@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
-import { FiActivity, FiBarChart2, FiUsers } from 'react-icons/fi';
+import { FiActivity, FiBarChart2, FiUsers } from '../../utils/iconCompat';
 import spacing from '../../design/spacing';
 import shadows from '../../design/shadows';
 

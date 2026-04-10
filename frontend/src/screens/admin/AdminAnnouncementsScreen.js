@@ -9,7 +9,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { FiBell, FiEdit, FiFileText, FiPlus, FiTrash2 } from 'react-icons/fi';
+import { FiBell, FiEdit, FiFileText, FiPlus, FiTrash2 } from '../../utils/iconCompat';
 import AppButton from '../../components/ui/AppButton';
 import AppCard from '../../components/ui/AppCard';
 import EmptyState from '../../components/ui/EmptyState';

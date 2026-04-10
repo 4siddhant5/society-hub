@@ -45,6 +45,7 @@ import ProfileScreen from './ProfileScreen';
 import MembersScreen from './MembersScreen';
 import GroupInfoScreen from './GroupInfoScreen';
 import EditProfileScreen from './EditProfileScreen';
+import SettingsScreen from './SettingsScreen';
 import SOSAlertsScreen from './SOSAlertsScreen';
 import BroadcastScreen from './BroadcastScreen';
 import CreateAnnouncementScreen from './CreateAnnouncementScreen';
@@ -73,6 +74,8 @@ const SCREEN_TITLES = {
   ProfileScreen: 'Profile',
   EditProfile: 'Edit Profile',
   EditProfileScreen: 'Edit Profile',
+  Settings: 'Settings',
+  SettingsScreen: 'Settings',
   Members: 'Members',
   MembersScreen: 'Members',
   CreateAnnouncement: 'Create Announcement',
@@ -594,6 +597,9 @@ export default function AdminDashboard() {
       case 'EditProfile':
       case 'EditProfileScreen':
         return <EditProfileScreen navigation={{ navigate, goBack }} userId={current.params?.userId} />;
+      case 'Settings':
+      case 'SettingsScreen':
+        return <SettingsScreen navigation={{ navigate, goBack }} />;
       case 'Members':
       case 'MembersScreen':
         return <MembersScreen goBack={goBack} onViewProfile={(id) => navigate('Profile', { userId: id })} />;

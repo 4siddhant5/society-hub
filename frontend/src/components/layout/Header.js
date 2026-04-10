@@ -15,7 +15,7 @@ import {
   updateDoc, doc, writeBatch, getDocs
 } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
-import { FiMenu, FiUser, FiBell } from 'react-icons/fi';
+import { FiMenu, FiUser, FiBell } from '../../utils/iconCompat';
 
 const formatTime = (ts) => {
   if (!ts) return '';
@@ -214,38 +214,38 @@ const Header = ({ title, onMenuPress, showMenuIcon, onProfilePress, onNotificati
 
 const styles = StyleSheet.create({
   header: {
-    height: 70,
+    height: 56,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: '#f1f5f9',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     ...Platform.select({ web: { position: 'sticky', top: 0, zIndex: 100 } }),
   },
-  leftSection: { flexDirection: 'row', alignItems: 'center' },
-  title: { fontSize: 20, fontWeight: '700', color: '#1e293b', marginLeft: 12 },
-  rightSection: { flexDirection: 'row', alignItems: 'center' },
-  iconButton: { padding: 8, marginLeft: 8, position: 'relative' },
+  leftSection: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 },
+  title: { fontSize: 15, fontWeight: '700', color: '#0f172a', flexShrink: 1 },
+  rightSection: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  iconButton: { padding: 8, position: 'relative' },
   badge: {
     position: 'absolute', top: 4, right: 4,
-    minWidth: 18, height: 18, borderRadius: 9,
+    minWidth: 16, height: 16, borderRadius: 8,
     backgroundColor: '#ef4444',
     borderWidth: 2, borderColor: '#fff',
     alignItems: 'center', justifyContent: 'center',
     paddingHorizontal: 2,
   },
   badgeNum: { color: '#fff', fontSize: 9, fontWeight: '800' },
-  profileButton: { marginLeft: 12 },
+  profileButton: { marginLeft: 4 },
   avatar: {
-    width: 38, height: 38, borderRadius: 19, backgroundColor: '#2563eb',
+    width: 34, height: 34, borderRadius: 17, backgroundColor: '#2563eb',
     alignItems: 'center', justifyContent: 'center',
   },
 
   // Dropdown overlay
   dropdownOverlay: {
-    position: 'absolute', top: 70, left: 0, right: 0, bottom: 0,
+    position: 'absolute', top: 56, left: 0, right: 0, bottom: 0,
     zIndex: 999,
     ...Platform.select({ web: { position: 'fixed' } }),
   },

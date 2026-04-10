@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { collection, doc, getDocs, onSnapshot, orderBy, query, updateDoc, where, writeBatch } from 'firebase/firestore';
-import { FiArrowLeft, FiBell, FiCheckCircle, FiClipboard, FiMessageSquare, FiRadio, FiShield } from 'react-icons/fi';
+import { FiArrowLeft, FiBell, FiCheckCircle, FiClipboard, FiMessageSquare, FiRadio, FiShield } from '../utils/iconCompat';
 import AppCard from '../components/ui/AppCard';
 import EmptyState from '../components/ui/EmptyState';
 import PageHeader from '../components/ui/PageHeader';

@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { FiInbox } from 'react-icons/fi';
+import { FiInbox } from '../../utils/iconCompat';
 import colors from '../../design/colors';
 import spacing from '../../design/spacing';
 import typography from '../../design/typography';

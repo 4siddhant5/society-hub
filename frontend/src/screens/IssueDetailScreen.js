@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { FiArrowLeft, FiCalendar, FiFlag } from 'react-icons/fi';
+import { FiArrowLeft, FiCalendar, FiFlag } from '../utils/iconCompat';
 import AppCard from '../components/ui/AppCard';
 import PageHeader from '../components/ui/PageHeader';
 import StatusBadge from '../components/ui/StatusBadge';

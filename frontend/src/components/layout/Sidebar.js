@@ -7,8 +7,8 @@ import {
   ScrollView,
   Platform,
 } from 'react-native';
-import { FiLogOut, FiX } from 'react-icons/fi';
-import { logoutAuthUser } from '../../services/authService';
+import { FiX } from '../../utils/iconCompat';
+import { SocietyHubMark } from '../branding/SocietyHubLogo';
 
 const WEB_ONLY = Platform.OS === 'web';
 
@@ -16,9 +16,12 @@ const Sidebar = ({ menuItems, activeScreen, onNavigate, onClose, isMobile = fals
   return (
     <View style={[styles.sidebar, isMobile && styles.mobileSidebar]}>
       <View style={styles.logoContainer}>
-        <View>
-          <Text style={styles.logoEyebrow}>Workspace</Text>
-          <Text style={styles.logoText}>SocietyHub</Text>
+        <View style={styles.brandLockup}>
+          <SocietyHubMark size={46} />
+          <View style={styles.brandCopy}>
+            <Text style={styles.logoEyebrow}>Workspace</Text>
+            <Text style={styles.logoText}>SocietyHub</Text>
+          </View>
         </View>
         {isMobile ? (
           <Pressable onPress={onClose} style={({ pressed }) => [styles.closeButton, pressed && styles.closeButtonPressed]}>
@@ -55,13 +58,6 @@ const Sidebar = ({ menuItems, activeScreen, onNavigate, onClose, isMobile = fals
           );
         })}
       </ScrollView>
-
-      <Pressable style={({ pressed }) => [styles.logoutButton, pressed && styles.pressedMenuItem]} onPress={logoutAuthUser}>
-        <View style={styles.logoutIconWrap}>
-          <FiLogOut size={18} color="#dc2626" />
-        </View>
-        <Text style={styles.logoutText}>Logout</Text>
-      </Pressable>
     </View>
   );
 };
@@ -101,6 +97,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  brandLockup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  brandCopy: {
+    marginLeft: 12,
   },
   logoEyebrow: {
     fontSize: 11,
@@ -178,30 +181,6 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 999,
     backgroundColor: '#2563eb',
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 12,
-    marginTop: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 16,
-    backgroundColor: '#fff5f5',
-  },
-  logoutIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fee2e2',
-  },
-  logoutText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#dc2626',
-    marginLeft: 12,
   },
 });
 

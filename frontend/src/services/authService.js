@@ -4,19 +4,15 @@ import {
   createUserWithEmailAndPassword,
   fetchSignInMethodsForEmail,
   GoogleAuthProvider,
-  PhoneAuthProvider,
-  RecaptchaVerifier,
-  signInWithCredential,
   signInWithEmailAndPassword,
-  signInWithPhoneNumber,
   signInWithPopup,
+  sendPasswordResetEmail,
   signOut,
 } from "firebase/auth";
 
-const recaptchaCache = new Map();
-
 export const HARDCODED_SUPER_ADMIN_EMAIL = "superadmin@societyhub.com";
 export const HARDCODED_SUPER_ADMIN_PASSWORD = "SuperAdmin@123";
+const shouldRunVerboseAuthChecks = __DEV__ && Platform.OS === "web";
 
 const parseCsv = (value) =>
   String(value || "")
@@ -54,13 +50,12 @@ export const validateFirebaseAuthConfig = async (email = "") => {
     authDomain: !!app?.options?.authDomain,
     projectId: !!app?.options?.projectId,
     emailPasswordConfigured: "Unable to verify from client. Confirm Email/Password is enabled in Firebase Console.",
-    phoneConfigured: "Unable to verify from client. Confirm Phone auth is enabled in Firebase Console.",
     platform: Platform.OS,
   };
 
   console.log("FIREBASE AUTH CONFIG:", configSummary);
 
-  if (email) {
+  if (shouldRunVerboseAuthChecks && email) {
     try {
       const methods = await fetchSignInMethodsForEmail(auth, email.trim().toLowerCase());
       console.log("FETCHED SIGN IN METHODS:", methods);
@@ -74,7 +69,9 @@ export const validateFirebaseAuthConfig = async (email = "") => {
 
 export const registerAuthUser = async (email, password) => {
   try {
-    await validateFirebaseAuthConfig(email);
+    if (shouldRunVerboseAuthChecks) {
+      await validateFirebaseAuthConfig(email);
+    }
     const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
     if (!userCredential?.user) {
       throw new Error("Firebase did not return a user after registration.");
@@ -89,7 +86,9 @@ export const registerAuthUser = async (email, password) => {
 
 export const loginAuthUser = async (email, password) => {
   try {
-    await validateFirebaseAuthConfig(email);
+    if (shouldRunVerboseAuthChecks) {
+      await validateFirebaseAuthConfig(email);
+    }
     const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
     if (!userCredential?.user) {
       throw new Error("Firebase did not return a user after login.");
@@ -98,84 +97,6 @@ export const loginAuthUser = async (email, password) => {
   } catch (error) {
     console.log("LOGIN ERROR:", error);
     console.error("Login error:", error);
-    throw error;
-  }
-};
-
-const buildRecaptcha = (containerId) => {
-  if (Platform.OS !== "web") {
-    throw new Error("Phone authentication is currently supported on web in this Expo setup. Use email login on native.");
-  }
-
-  const existing = recaptchaCache.get(containerId);
-  if (existing) {
-    return existing;
-  }
-
-  const verifier = new RecaptchaVerifier(auth, containerId, {
-    size: "invisible",
-    callback: () => {
-      console.log("reCAPTCHA solved for phone auth");
-    },
-  });
-
-  recaptchaCache.set(containerId, verifier);
-  return verifier;
-};
-
-export const sendPhoneOtp = async (phoneNumber, containerId) => {
-  try {
-    await validateFirebaseAuthConfig();
-    const normalizedPhone = normalizePhoneNumber(phoneNumber);
-    if (!normalizedPhone) {
-      throw new Error("Enter a valid phone number.");
-    }
-
-    const verifier = buildRecaptcha(containerId);
-    return await signInWithPhoneNumber(auth, normalizedPhone, verifier);
-  } catch (error) {
-    console.log("PHONE OTP SEND ERROR:", error);
-    console.error("Phone OTP send error:", error);
-    throw error;
-  }
-};
-
-export const verifyPhoneOtp = async (confirmationResult, otp) => {
-  try {
-    if (!confirmationResult) {
-      throw new Error("OTP session expired. Please request a new code.");
-    }
-    if (!otp) {
-      throw new Error("Enter the OTP you received.");
-    }
-
-    const credentialResult = await confirmationResult.confirm(otp);
-    if (!credentialResult?.user) {
-      throw new Error("Firebase did not return a user after OTP verification.");
-    }
-    return credentialResult.user;
-  } catch (error) {
-    console.log("PHONE OTP VERIFY ERROR:", error);
-    console.error("Phone OTP verify error:", error);
-    throw error;
-  }
-};
-
-export const verifyPhoneOtpWithVerificationId = async (verificationId, otp) => {
-  try {
-    if (!verificationId || !otp) {
-      throw new Error("Verification session missing. Please request OTP again.");
-    }
-
-    const credential = PhoneAuthProvider.credential(verificationId, otp);
-    const credentialResult = await signInWithCredential(auth, credential);
-    if (!credentialResult?.user) {
-      throw new Error("Firebase did not return a user after OTP verification.");
-    }
-    return credentialResult.user;
-  } catch (error) {
-    console.log("PHONE OTP VERIFY ERROR:", error);
-    console.error("Phone OTP verify error:", error);
     throw error;
   }
 };
@@ -196,6 +117,22 @@ export const signInWithGoogle = async () => {
   } catch (error) {
     console.log("GOOGLE SIGN-IN ERROR:", error);
     console.error("Google sign-in error:", error);
+    throw error;
+  }
+};
+
+export const sendPasswordReset = async (email) => {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+
+  if (!normalizedEmail) {
+    throw new Error("Enter your email address first.");
+  }
+
+  try {
+    await sendPasswordResetEmail(auth, normalizedEmail);
+  } catch (error) {
+    console.log("PASSWORD RESET ERROR:", error);
+    console.error("Password reset error:", error);
     throw error;
   }
 };

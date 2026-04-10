@@ -1,7 +1,7 @@
 import React, { memo, useMemo } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 import EmptyState from '../../../components/ui/EmptyState';
-import { FiAlertTriangle } from 'react-icons/fi';
+import { FiAlertTriangle } from '../../../utils/iconCompat';
 import IssueCard from './IssueCard';
 
 const IssueGrid = ({

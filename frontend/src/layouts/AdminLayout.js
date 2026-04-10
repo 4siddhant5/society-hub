@@ -1,6 +1,6 @@
 import React from 'react';
 import BaseLayout from './BaseLayout';
-import { FiHome, FiUsers, FiAlertTriangle, FiBell, FiBarChart2, FiPieChart, FiCalendar } from 'react-icons/fi';
+import { FiHome, FiUsers, FiAlertTriangle, FiBell, FiBarChart2, FiPieChart, FiCalendar } from '../utils/iconCompat';
 
 const AdminLayout = ({ children, activeScreen, onNavigate, title }) => {
   const menuItems = [

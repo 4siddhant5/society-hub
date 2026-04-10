@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
-import { FiSearch } from 'react-icons/fi';
+import { FiSearch } from '../../utils/iconCompat';
 import colors from '../../design/colors';
 import spacing from '../../design/spacing';
 import shadows from '../../design/shadows';

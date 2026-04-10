@@ -27,7 +27,7 @@ import {
   FiUsers,
   FiX,
   FiXCircle,
-} from 'react-icons/fi';
+} from '../../utils/iconCompat';
 
 const formatFlatLabel = (item) => {
   const parts = [];

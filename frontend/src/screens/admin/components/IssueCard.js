@@ -8,7 +8,7 @@ import {
   View,
   Image,
 } from 'react-native';
-import { FiImage, FiMessageSquare, FiUser } from 'react-icons/fi';
+import { FiImage, FiMessageSquare, FiUser } from '../../../utils/iconCompat';
 import AppCard from '../../../components/ui/AppCard';
 import PriorityBadge from './PriorityBadge';
 import StatusBadge from './StatusBadge';

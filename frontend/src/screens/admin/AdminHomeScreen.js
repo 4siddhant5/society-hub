@@ -30,8 +30,8 @@ import {
   IoTimeOutline,
   IoCheckmarkDoneCircle,
   IoRadio,
-} from 'react-icons/io5';
-import { FiInbox } from 'react-icons/fi';
+} from '../../utils/iconCompat';
+import { FiInbox } from '../../utils/iconCompat';
 
 const MANAGEMENT_ACTIONS = [
   {
